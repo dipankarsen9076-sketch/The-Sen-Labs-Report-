@@ -5,6 +5,7 @@ from PIL import Image
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 import io
 import json
 import re
@@ -29,7 +30,7 @@ with c3:
     p_contact = st.text_input("Lab Contact / Helpline", value="9076816740")
     sample_id = st.text_input("Sample ID / Lab No.", value=f"TSL-{datetime.now().strftime('%y%m%d%H%M')}")
 
-# 2. Multi-Test Profile Selector (DEFAULT EMPTY)
+# 2. Multi-Test Profile Selector
 st.subheader("2. Select Test Profiles for Patient")
 selected_profiles = st.multiselect(
     "Select investigations prescribed for this patient:",
@@ -446,11 +447,11 @@ class PDFReportManager:
         self.draw_header()
 
     def draw_header(self):
-        # 1. Top Blue Banner
+        # 1. Top Royal Navy Blue Banner
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
         self.c.rect(0, self.height - 62, self.width, 62, fill=True, stroke=False)
         
-        # 2. ROBUST LOGO FINDER (Checks all extensions & relative paths)
+        # 2. SEAMLESS VECTOR LOGO (Auto-removes black background & recolors to white)
         possible_paths = [
             "logo.png",
             "logo.png.png",
@@ -469,12 +470,26 @@ class PDFReportManager:
         text_x_pos = 32
         if found_logo:
             try:
-                # Crisp White Circular Emblem Backdrop
-                self.c.setFillColor(colors.white)
-                self.c.circle(55, self.height - 31, 23, fill=True, stroke=False)
-                # Logo inside Circle Badge
-                self.c.drawImage(found_logo, 35, self.height - 51, width=40, height=40, preserveAspectRatio=True, mask='auto')
-                text_x_pos = 88
+                orig_img = Image.open(found_logo).convert("RGBA")
+                datas = orig_img.getdata()
+                
+                new_data = []
+                for item in datas:
+                    # Agar pixel black ya dark hai to transparent karo, warna pure white emblem bana do
+                    if item[0] < 50 and item[1] < 50 and item[2] < 50:
+                        new_data.append((255, 255, 255, 0))
+                    else:
+                        new_data.append((255, 255, 255, 255))
+                        
+                orig_img.putdata(new_data)
+                
+                img_stream = io.BytesIO()
+                orig_img.save(img_stream, format="PNG")
+                img_stream.seek(0)
+                
+                reader = ImageReader(img_stream)
+                self.c.drawImage(reader, 32, self.height - 52, width=44, height=44, preserveAspectRatio=True, mask='auto')
+                text_x_pos = 84
             except Exception:
                 text_x_pos = 32
 
