@@ -62,6 +62,7 @@ if active_image and st.button("Extract Data from Photo"):
 
       # Models fallback list in case of 503 high demand
       candidate_models = [
+         "gemini-3.5-flash",
           "gemini-2.5-flash",
           "gemini-2.0-flash",
           "gemini-2.0-flash-lite",
