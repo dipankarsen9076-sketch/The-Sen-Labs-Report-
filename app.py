@@ -9,11 +9,12 @@ import io
 import json
 import re
 from datetime import datetime
+import os
 
 st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wide")
 st.title("The Sen Labs - Clinical Diagnostic System")
 
-api_key = st.sidebar.text_input("Enter Gemini API Key", type="password")
+api_key = st.sidebar.text_input("Enter Gemini API Key (For OCR)", type="password")
 
 # 1. Patient Details
 st.subheader("1. Patient & Sample Information")
@@ -28,7 +29,7 @@ with c3:
     p_contact = st.text_input("Lab Contact / Helpline", value="9076816740")
     sample_id = st.text_input("Sample ID / Lab No.", value=f"TSL-{datetime.now().strftime('%y%m%d%H%M')}")
 
-# 2. Multi-Test Profile Selector
+# 2. Multi-Test Profile Selector (DEFAULT EMPTY)
 st.subheader("2. Select Test Profiles for Patient")
 selected_profiles = st.multiselect(
     "Select investigations prescribed for this patient:",
@@ -123,7 +124,6 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         rbc = st.text_input("Total RBC Count", value=str(c_raw.get("RBC", "")))
         hct = st.text_input("Hematocrit (PCV)", value=str(c_raw.get("HCT", c_raw.get("PCV", ""))))
         
-        # RBC Indices Formulas: MCV=(HCT*10)/RBC, MCH=(Hb*10)/RBC, MCHC=(Hb*100)/HCT
         hgb_f, rbc_f, hct_f = safe_float(hgb), safe_float(rbc), safe_float(hct)
         calc_mcv = str(c_raw.get("MCV", ""))
         calc_mch = str(c_raw.get("MCH", ""))
@@ -142,13 +142,11 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         lym_p = st.text_input("Lymphocytes (%)", value=str(c_raw.get("LYM_PERCENT", "")))
         mid_p = st.text_input("Monocytes / Mid (%)", value=str(c_raw.get("MID_PERCENT", "")))
 
-        # ABSOLUTE COUNT CALCULATION FORMULAS: (TLC * Percentage) / 100
         wbc_f = safe_float(wbc)
         gran_p_f = safe_float(gran_p)
         lym_p_f = safe_float(lym_p)
         mid_p_f = safe_float(mid_p)
 
-        # Machine OCR check or Auto Math Calculation
         calc_gran_abs = str(c_raw.get("GRAN_ABSOLUTE", c_raw.get("GRAN", "")))
         if not calc_gran_abs and wbc_f and gran_p_f is not None:
             calc_gran_abs = f"{(wbc_f * gran_p_f) / 100.0:.2f}"
@@ -165,7 +163,7 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         gran_abs = st.text_input("Absolute Neutrophil Count (#)", value=calc_gran_abs)
         lym_abs = st.text_input("Absolute Lymphocyte Count (#)", value=calc_lym_abs)
         mid_abs = st.text_input("Absolute Monocyte/Mid Count (#)", value=calc_mid_abs)
-        st.info("✨ Absolute Counts calculated automatically using (WBC x %) / 100")
+        st.caption("✨ Absolute Counts Auto-Calculated (TLC x %) / 100")
 
     with cbc_cols[3]:
         plt = st.text_input("Platelet Count (PLT)", value=str(c_raw.get("PLT", c_raw.get("Platelets", ""))))
@@ -448,15 +446,47 @@ class PDFReportManager:
         self.draw_header()
 
     def draw_header(self):
+        # 1. Top Blue Banner
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
-        self.c.rect(0, self.height - 60, self.width, 60, fill=True, stroke=False)
+        self.c.rect(0, self.height - 62, self.width, 62, fill=True, stroke=False)
+        
+        # 2. ROBUST LOGO FINDER (Checks all extensions & relative paths)
+        possible_paths = [
+            "logo.png",
+            "logo.png.png",
+            os.path.join(os.path.dirname(__file__), "logo.png"),
+            os.path.join(os.path.dirname(__file__), "logo.png.png"),
+            "/mount/src/the-sen-labs-reporting/logo.png",
+            "/mount/src/the-sen-labs-reporting/logo.png.png"
+        ]
+        
+        found_logo = None
+        for p in possible_paths:
+            if os.path.exists(p):
+                found_logo = p
+                break
+
+        text_x_pos = 32
+        if found_logo:
+            try:
+                # Crisp White Circular Emblem Backdrop
+                self.c.setFillColor(colors.white)
+                self.c.circle(55, self.height - 31, 23, fill=True, stroke=False)
+                # Logo inside Circle Badge
+                self.c.drawImage(found_logo, 35, self.height - 51, width=40, height=40, preserveAspectRatio=True, mask='auto')
+                text_x_pos = 88
+            except Exception:
+                text_x_pos = 32
+
+        # 3. Lab Title & Subtitle
         self.c.setFillColor(colors.white)
         self.c.setFont("Helvetica-Bold", 17)
-        self.c.drawString(32, self.height - 30, "THE SEN LABS")
-        self.c.setFont("Helvetica", 7.8)
-        self.c.drawString(32, self.height - 46, "ADVANCED PATHOLOGY & CLINICAL BIOCHEMISTRY | AUTOMATED DIAGNOSTICS")
+        self.c.drawString(text_x_pos, self.height - 28, "THE SEN LABS")
+        self.c.setFont("Helvetica", 7.5)
+        self.c.drawString(text_x_pos, self.height - 44, "ADVANCED PATHOLOGY & CLINICAL BIOCHEMISTRY | AUTOMATED DIAGNOSTICS")
         self.c.drawRightString(self.width - 32, self.height - 34, f"Helpdesk: +91 {self.p['contact']}")
         
+        # 4. Patient Info Box
         self.c.setFillColor(colors.HexColor("#f8fafc"))
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
         self.c.roundRect(32, self.height - 122, self.width - 64, 56, 3, fill=True, stroke=True)
@@ -579,14 +609,12 @@ class PDFReportManager:
     def print_cbc_and_gbp_together(self, cbc_items, gbp_data):
         active_rows = {k: v for k, v in cbc_items.items() if str(v[0]).strip() != ""}
         
-        # Dept Banner
         self.c.setFillColor(colors.HexColor("#0f766e"))
         self.c.rect(32, self.curr_y - 12, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.white)
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, "COMPLETE BLOOD COUNT (AUTOMATED HEMATOLOGY WITH ABSOLUTE INDICES)")
 
-        # Table Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 23, self.width - 64, 11, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
@@ -598,7 +626,6 @@ class PDFReportManager:
         self.c.drawString(455, self.curr_y - 20, "REFERENCE INTERVAL")
 
         y = self.curr_y - 32
-        # Calibrated 9.4pt row height so all 20 parameters fit cleanly in top half
         for param, (val, method, unit, ref, low_val, high_val) in active_rows.items():
             val_str = str(val).strip()
             v_num = safe_float(val_str)
@@ -639,7 +666,7 @@ class PDFReportManager:
             self.c.line(32, y - 1.5, self.width - 32, y - 1.5)
             y -= 9.4
 
-        # GBP Section on SAME PAGE directly under CBC table
+        # GBP Section on SAME PAGE
         gbp_top = y - 3
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
         self.c.rect(32, gbp_top, self.width - 64, 10, fill=True, stroke=False)
@@ -663,8 +690,6 @@ class PDFReportManager:
             gy -= 8.2
             
         self.curr_y = box_top - 41
-        
-        # Clinical Guidance Box filling bottom area on same page
         self.print_knowledge_box("CBC")
 
     def print_section(self, section_key, title, data_dict, bar_hex, is_first_on_page=False):
@@ -679,14 +704,12 @@ class PDFReportManager:
             if self.curr_y - needed < 65:
                 self.new_page()
 
-        # Department Banner
         self.c.setFillColor(colors.HexColor(bar_hex))
         self.c.rect(32, self.curr_y - 12, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.white)
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, title)
 
-        # Table Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 25, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
@@ -769,27 +792,22 @@ else:
         doc = PDFReportManager(buf, p_info, separate_pages_mode=separate_pages)
         first_section = True
         
-        # 1. CBC + GBP (ALWAYS TOGETHER ON PAGE 1)
         if "CBC" in final_report_sections:
             doc.print_cbc_and_gbp_together(final_report_sections["CBC"]["items"], final_report_sections["CBC"]["gbp"])
             first_section = False
             
-        # 2. LFT
         if "LFT" in final_report_sections:
             doc.print_section("LFT", "CLINICAL BIOCHEMISTRY - LIVER FUNCTION TEST (LFT)", final_report_sections["LFT"], "#854d0e", is_first_on_page=first_section)
             first_section = False
             
-        # 3. KFT
         if "KFT" in final_report_sections:
             doc.print_section("KFT", "CLINICAL BIOCHEMISTRY - KIDNEY FUNCTION TEST (KFT)", final_report_sections["KFT"], "#7c2d12", is_first_on_page=first_section)
             first_section = False
             
-        # 4. Lipid
         if "LIPID" in final_report_sections:
             doc.print_section("LIPID", "CLINICAL BIOCHEMISTRY - LIPID PROFILE", final_report_sections["LIPID"], "#be123c", is_first_on_page=first_section)
             first_section = False
 
-        # 5. Distinct Independent Serology Profiles (Widal, Typhidot, Malaria)
         if "WIDAL" in final_report_sections:
             doc.print_section("WIDAL", "SEROLOGY - WIDAL AGGLUTINATION PROFILE", final_report_sections["WIDAL"], "#4338ca", is_first_on_page=first_section)
             first_section = False
