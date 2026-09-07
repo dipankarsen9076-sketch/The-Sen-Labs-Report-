@@ -39,14 +39,31 @@ if active_image and st.button("Extract Data from Photo"):
     if not api_key:
         st.error("Pehle sidebar me apni API Key dalein!")
     else:
-        with st.spinner("Analyzing machine screen and reading values..."):
+        with st.spinner("Analyzing machine screen and extracting all parameters..."):
             try:
                 client = genai.Client(api_key=api_key)
                 prompt = """
-                Extract all hematology/CBC test parameters and values from this analyzer display/printout.
-                Standardize names: Hemoglobin, TLC (WBC), RBC, Platelets, PCV (Hematocrit), MCV, MCH, MCHC, RDW, Neutrophils/Granulocytes, Lymphocytes, Monocytes/Mid Cells, MPV.
-                Return strictly a JSON dictionary with parameter name as key and value as string/number.
-                No backticks, no markdown.
+                You are a clinical hematology data extraction assistant.
+                Carefully scan this 3-part / 5-part hematology analyzer display or thermal printout.
+                Extract EVERY SINGLE parameter and index present in the image without skipping any.
+                Examples to capture:
+                - Hemoglobin (Hb)
+                - Total Leukocyte Count / WBC
+                - RBC count
+                - Hematocrit / Packed Cell Volume (HCT / PCV)
+                - MCV, MCH, MCHC
+                - RDW-CV (or RDW %), RDW-SD (or RDWa)
+                - Platelet count (PLT)
+                - MPV, PDW, PCT, P-LCR / LPCR, P-LCC
+                - Differential Leukocyte Counts (both % and absolute if present):
+                  Neutrophils / Granulocytes (% and #)
+                  Lymphocytes (% and #)
+                  Monocytes / Mid cells (% and #)
+                  Eosinophils, Basophils (if present)
+
+                Output strictly a valid JSON object where keys are the exact/clean parameter names and values are strings or numbers.
+                Do not omit or skip any row shown in the image.
+                Do not include markdown code block formatting or backticks.
                 """
                 response = client.models.generate_content(
                     model="gemini-3.5-flash",
@@ -61,146 +78,194 @@ if active_image and st.button("Extract Data from Photo"):
                 raw_text = response.text.strip()
                 cleaned_json = re.sub(r"^```json\s*|\s*```$", "", raw_text, flags=re.MULTILINE).strip()
                 st.session_state.extracted_tests = json.loads(cleaned_json)
-                st.success("Values extracted! Check and edit below if required.")
+                st.success(f"Extracted {len(st.session_state.extracted_tests)} parameters! Check and edit below.")
             except Exception as err:
                 st.error(f"Extraction error: {err}")
 
+# Comprehensive Reference Ranges & Units Database
 REF_DATA = {
     "Hemoglobin": {"unit": "g/dL", "ref": "13.0 - 17.0"},
-    "TLC (WBC)": {"unit": "10^3/uL", "ref": "4.0 - 10.0"},
+    "Hb": {"unit": "g/dL", "ref": "13.0 - 17.0"},
     "WBC": {"unit": "10^3/uL", "ref": "4.0 - 10.0"},
+    "TLC": {"unit": "10^3/uL", "ref": "4.0 - 10.0"},
+    "TLC (WBC)": {"unit": "10^3/uL", "ref": "4.0 - 10.0"},
     "RBC": {"unit": "10^6/uL", "ref": "4.50 - 5.50"},
-    "Platelets": {"unit": "10^3/uL", "ref": "150 - 450"},
-    "PCV (Hematocrit)": {"unit": "%", "ref": "40.0 - 50.0"},
+    "RBC Count": {"unit": "10^6/uL", "ref": "4.50 - 5.50"},
     "Hematocrit": {"unit": "%", "ref": "40.0 - 50.0"},
+    "HCT": {"unit": "%", "ref": "40.0 - 50.0"},
+    "PCV": {"unit": "%", "ref": "40.0 - 50.0"},
+    "PCV (Hematocrit)": {"unit": "%", "ref": "40.0 - 50.0"},
     "MCV": {"unit": "fL", "ref": "80.0 - 100.0"},
     "MCH": {"unit": "pg", "ref": "27.0 - 32.0"},
     "MCHC": {"unit": "g/dL", "ref": "31.5 - 35.5"},
     "RDW": {"unit": "%", "ref": "11.5 - 14.5"},
+    "RDW-CV": {"unit": "%", "ref": "11.5 - 14.5"},
     "RDW_Percent": {"unit": "%", "ref": "11.5 - 14.5"},
+    "RDW %": {"unit": "%", "ref": "11.5 - 14.5"},
+    "RDW-SD": {"unit": "fL", "ref": "39.0 - 46.0"},
     "RDWa": {"unit": "fL", "ref": "39.0 - 46.0"},
-    "Neutrophils/Granulocytes": {"unit": "%", "ref": "40.0 - 70.0"},
-    "Granulocytes_Percent": {"unit": "%", "ref": "40.0 - 70.0"},
-    "Granulocytes_Absolute": {"unit": "10^3/uL", "ref": "2.0 - 7.0"},
-    "Lymphocytes": {"unit": "%", "ref": "20.0 - 40.0"},
-    "Lymphocytes_Percent": {"unit": "%", "ref": "20.0 - 40.0"},
-    "Lymphocytes_Absolute": {"unit": "10^3/uL", "ref": "1.0 - 3.0"},
-    "Monocytes/Mid Cells": {"unit": "%", "ref": "2.0 - 8.0"},
-    "Mid_Cells_Percent": {"unit": "%", "ref": "2.0 - 8.0"},
-    "Mid_Cells_Absolute": {"unit": "10^3/uL", "ref": "0.1 - 0.8"},
+    "Platelets": {"unit": "10^3/uL", "ref": "150 - 450"},
+    "PLT": {"unit": "10^3/uL", "ref": "150 - 450"},
     "MPV": {"unit": "fL", "ref": "7.5 - 11.5"},
-    "PDW": {"unit": "%", "ref": "9.0 - 17.0"},
+    "PDW": {"unit": "fL / %", "ref": "9.0 - 17.0"},
+    "PCT": {"unit": "%", "ref": "0.10 - 0.50"},
     "LPCR": {"unit": "%", "ref": "15.0 - 35.0"},
-    "PCT": {"unit": "%", "ref": "0.10 - 0.50"}
+    "P-LCR": {"unit": "%", "ref": "15.0 - 35.0"},
+    "P-LCC": {"unit": "10^3/uL", "ref": "30 - 90"},
+    "Granulocytes_Percent": {"unit": "%", "ref": "40.0 - 70.0"},
+    "Granulocytes %": {"unit": "%", "ref": "40.0 - 70.0"},
+    "Neutrophils %": {"unit": "%", "ref": "40.0 - 70.0"},
+    "Granulocytes_Absolute": {"unit": "10^3/uL", "ref": "2.0 - 7.0"},
+    "Granulocytes #": {"unit": "10^3/uL", "ref": "2.0 - 7.0"},
+    "Neutrophils #": {"unit": "10^3/uL", "ref": "2.0 - 7.0"},
+    "Lymphocytes_Percent": {"unit": "%", "ref": "20.0 - 40.0"},
+    "Lymphocytes %": {"unit": "%", "ref": "20.0 - 40.0"},
+    "Lymphocytes": {"unit": "%", "ref": "20.0 - 40.0"},
+    "Lymphocytes_Absolute": {"unit": "10^3/uL", "ref": "1.0 - 3.0"},
+    "Lymphocytes #": {"unit": "10^3/uL", "ref": "1.0 - 3.0"},
+    "Mid_Cells_Percent": {"unit": "%", "ref": "2.0 - 8.0"},
+    "Mid_Cells %": {"unit": "%", "ref": "2.0 - 8.0"},
+    "Monocytes %": {"unit": "%", "ref": "2.0 - 8.0"},
+    "Mid_Cells_Absolute": {"unit": "10^3/uL", "ref": "0.1 - 0.8"},
+    "Mid_Cells #": {"unit": "10^3/uL", "ref": "0.1 - 0.8"},
+    "Monocytes #": {"unit": "10^3/uL", "ref": "0.1 - 0.8"},
+    "Eosinophils %": {"unit": "%", "ref": "1.0 - 6.0"},
+    "Basophils %": {"unit": "%", "ref": "0.0 - 1.0"},
 }
 
+def lookup_ref(param_name):
+    norm = param_name.strip()
+    if norm in REF_DATA:
+        return REF_DATA[norm]
+    for k, v in REF_DATA.items():
+        if k.lower() == norm.lower():
+            return v
+    # Fuzzy match
+    if "hb" in norm.lower() or "hemo" in norm.lower():
+        return REF_DATA["Hemoglobin"]
+    if "platelet" in norm.lower() or "plt" in norm.lower():
+        return REF_DATA["Platelets"]
+    if "wbc" in norm.lower() or "tlc" in norm.lower():
+        return REF_DATA["WBC"]
+    if "rbc" in norm.lower():
+        return REF_DATA["RBC"]
+    return {"unit": "-", "ref": "Clinical Correlation"}
+
 if st.session_state.extracted_tests:
-    st.subheader("Verify & Edit Values")
+    st.subheader(f"Verify & Edit Values ({len(st.session_state.extracted_tests)} parameters found)")
     final_data = {}
+    
+    # 2-column edit layout for quick review on mobile
+    cols = st.columns(2)
+    idx = 0
     for test, val in st.session_state.extracted_tests.items():
         clean_label = test.replace('_', ' ')
-        final_data[test] = st.text_input(f"{clean_label}", value=str(val))
+        with cols[idx % 2]:
+            final_data[test] = st.text_input(f"{clean_label}", value=str(val), key=f"inp_{test}")
+        idx += 1
     
-    if st.button("Generate Professional PDF Report"):
+    if st.button("Generate Complete Professional PDF Report"):
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=letter)
         width, height = letter
         
         # Header Banner
         c.setFillColor(colors.HexColor("#1a365d"))
-        c.rect(0, height - 70, width, 70, fill=True, stroke=False)
+        c.rect(0, height - 68, width, 68, fill=True, stroke=False)
         c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 20)
-        c.drawString(40, height - 38, "THE SEN LABS")
-        c.setFont("Helvetica", 9)
-        c.drawString(40, height - 54, "ADVANCED PATHOLOGY & CLINICAL LABORATORY | AUTOMATED HEMATOLOGY")
-        c.drawRightString(width - 40, height - 42, f"Helpdesk: +91 {p_contact}")
+        c.setFont("Helvetica-Bold", 19)
+        c.drawString(36, height - 36, "THE SEN LABS")
+        c.setFont("Helvetica", 8.5)
+        c.drawString(36, height - 52, "ADVANCED PATHOLOGY & CLINICAL LABORATORY | 3-PART & 5-PART AUTOMATED HEMATOLOGY")
+        c.drawRightString(width - 36, height - 40, f"Helpdesk: +91 {p_contact}")
         
         # Patient Details Box
         c.setFillColor(colors.HexColor("#f8fafc"))
-        c.roundRect(40, height - 145, width - 80, 62, 4, fill=True, stroke=True)
+        c.setStrokeColor(colors.HexColor("#cbd5e1"))
+        c.roundRect(36, height - 138, width - 72, 60, 4, fill=True, stroke=True)
+        
         c.setFillColor(colors.HexColor("#334155"))
-        c.setFont("Helvetica-Bold", 8.5)
-        c.drawString(52, height - 98, "Patient Name:")
-        c.drawString(52, height - 116, "Age / Sex:")
-        c.drawString(52, height - 134, "Referred By:")
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(48, height - 94, "Patient Name:")
+        c.drawString(48, height - 110, "Age / Sex:")
+        c.drawString(48, height - 126, "Referred By:")
         
-        c.setFont("Helvetica", 8.5)
-        c.drawString(130, height - 98, f"Mr. {p_name}")
-        c.drawString(130, height - 116, f"{p_age} Yrs / {p_sex}")
-        c.drawString(130, height - 134, f"Dr. {p_doctor}")
+        c.setFont("Helvetica", 8)
+        c.drawString(120, height - 94, f"Mr. {p_name}")
+        c.drawString(120, height - 110, f"{p_age} Yrs / {p_sex}")
+        c.drawString(120, height - 126, f"Dr. {p_doctor}")
         
-        c.setFont("Helvetica-Bold", 8.5)
-        c.drawString(330, height - 98, "Sample ID:")
-        c.drawString(330, height - 116, "Sample Type:")
-        c.drawString(330, height - 134, "Report Date:")
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(330, height - 94, "Sample ID:")
+        c.drawString(330, height - 110, "Sample Type:")
+        c.drawString(330, height - 126, "Report Date:")
         
-        c.setFont("Helvetica", 8.5)
-        c.drawString(405, height - 98, "TSL-EDTA-8167")
-        c.drawString(405, height - 116, "Whole Blood (EDTA)")
-        c.drawString(405, height - 134, "07-Sep-2026 11:30 AM")
+        c.setFont("Helvetica", 8)
+        c.drawString(405, height - 94, "TSL-CBC-8167")
+        c.drawString(405, height - 110, "Whole Blood (EDTA)")
+        c.drawString(405, height - 126, "07-Sep-2026 11:30 AM")
         
         # Department Banner
         c.setFillColor(colors.HexColor("#0d9488"))
-        c.rect(40, height - 165, width - 80, 15, fill=True, stroke=False)
+        c.rect(36, height - 156, width - 72, 14, fill=True, stroke=False)
         c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 8.5)
-        c.drawString(46, height - 162, "DEPARTMENT OF HEMATOLOGY - COMPLETE BLOOD COUNT")
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(42, height - 153, "COMPLETE BLOOD COUNT (AUTOMATED HEMATOLOGY PROFILE)")
         
         # Table Header
         c.setFillColor(colors.HexColor("#e2e8f0"))
-        c.rect(40, height - 185, width - 80, 16, fill=True, stroke=False)
+        c.rect(36, height - 173, width - 72, 14, fill=True, stroke=False)
         c.setFillColor(colors.HexColor("#0f172a"))
-        c.setFont("Helvetica-Bold", 8)
-        c.drawString(46, height - 181, "INVESTIGATION / PARAMETER")
-        c.drawString(250, height - 181, "RESULT")
-        c.drawString(325, height - 181, "UNIT")
-        c.drawString(410, height - 181, "REFERENCE RANGE")
+        c.setFont("Helvetica-Bold", 7.5)
+        c.drawString(44, height - 170, "INVESTIGATION / PARAMETER")
+        c.drawString(250, height - 170, "RESULT")
+        c.drawString(325, height - 170, "UNIT")
+        c.drawString(410, height - 170, "BIOLOGICAL REFERENCE RANGE")
         
-        # Table Rows
-        y = height - 200
-        c.setFont("Helvetica", 8)
+        # Table Rows (Tight 13.5 pt spacing to fit all 20+ parameters cleanly on single page)
+        y = height - 188
+        c.setFont("Helvetica", 7.5)
         
         for key, val in final_data.items():
-            ref_info = REF_DATA.get(key, {"unit": "-", "ref": "Clinical Correlation"})
+            ref_info = lookup_ref(key)
             clean_name = key.replace('_', ' ')
             
             c.setFillColor(colors.HexColor("#0f172a"))
-            c.drawString(46, y, str(clean_name))
+            c.drawString(44, y, str(clean_name))
             
-            c.setFont("Helvetica-Bold", 8)
+            c.setFont("Helvetica-Bold", 7.5)
             c.drawString(250, y, str(val))
-            c.setFont("Helvetica", 8)
+            c.setFont("Helvetica", 7.5)
             
             c.drawString(325, y, str(ref_info["unit"]))
             c.drawString(410, y, str(ref_info["ref"]))
             
             c.setStrokeColor(colors.HexColor("#f1f5f9"))
-            c.line(40, y - 3, width - 40, y - 3)
+            c.line(36, y - 2, width - 36, y - 2)
             
-            y -= 15
-            if y < 90:
-                c.showPage()
-                y = height - 50
+            y -= 13.2
+            if y < 85:
+                # Signature block space guard
+                break
                 
         # Verification Signatures
         c.setStrokeColor(colors.HexColor("#cbd5e1"))
-        c.line(40, 75, width - 40, 75)
+        c.line(36, 72, width - 36, 72)
         c.setFont("Helvetica-Bold", 8)
         c.setFillColor(colors.HexColor("#0f172a"))
-        c.drawString(50, 60, "Amit Kumar Verma")
-        c.drawString(width - 190, 60, "Dr. R. K. Banerjee")
+        c.drawString(46, 58, "Dipankar Sen")
+        c.drawString(width - 190, 58, "Dr. R. K. Banerjee")
         c.setFont("Helvetica", 7)
         c.setFillColor(colors.HexColor("#64748b"))
-        c.drawString(50, 50, "Chief Lab Technologist (DMLT / B.Sc MLT)")
-        c.drawString(width - 190, 50, "Consultant Pathologist (MD Path)")
+        c.drawString(46, 48, "Medical Lab Technologist (DMLT / BSS)")
+        c.drawString(width - 190, 48, "Consultant Pathologist (MD Path)")
         
         c.save()
         buf.seek(0)
         
         st.download_button(
-            label="Download Professional Pathology PDF",
+            label="📥 Download Complete Pathology PDF",
             data=buf,
-            file_name=f"{p_name.replace(' ', '_')}_CBC_Report.pdf",
+            file_name=f"{p_name.replace(' ', '_')}_Complete_CBC.pdf",
             mime="application/pdf"
         )
