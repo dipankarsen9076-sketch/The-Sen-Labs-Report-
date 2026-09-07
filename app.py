@@ -26,24 +26,49 @@ with col2:
   p_sex = st.selectbox("Sex", ["Male (M)", "Female (F)", "Other"])
   p_contact = st.text_input("Lab Contact", value="9076816740")
 
-# Photo Capture / Upload
+# Input Option: Choose Gallery or Camera (Camera band rahega jab tak zaroorat na ho)
 st.subheader("Analyzer Screen / Printout Slip")
-camera_photo = st.camera_input("Take photo from camera")
-uploaded_file = st.file_uploader(
-    "Or upload image from gallery", type=["jpg", "jpeg", "png"]
+input_mode = st.radio(
+    "Photo Source Chuniye:",
+    ("📁 Upload from Gallery", "📸 Take Photo with Camera"),
+    horizontal=True,
 )
 
-active_image = camera_photo or uploaded_file
+active_image = None
+if input_mode == "📁 Upload from Gallery":
+  active_image = st.file_uploader(
+      "Gallery se Slip / Screen ki photo upload karein",
+      type=["jpg", "jpeg", "png"],
+  )
+else:
+  active_image = st.camera_input("Camera se machine screen ki photo lein")
+
+
+# Image compression helper to boost AI speed 5x
+def compress_image_for_fast_ai(img_file):
+  img = Image.open(img_file)
+  if img.mode in ("RGBA", "P"):
+    img = img.convert("RGB")
+  # Resize dimension to optimal OCR size (1200px max)
+  img.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
+  out_bytes = io.BytesIO()
+  img.save(out_bytes, format="JPEG", quality=82, optimize=True)
+  return out_bytes.getvalue()
+
 
 if "extracted_tests" not in st.session_state:
   st.session_state.extracted_tests = {}
 
-if active_image and st.button("Extract Data from Photo"):
+if active_image and st.button("⚡ Extract Data from Photo (Fast Mode)"):
   if not api_key:
     st.error("Pehle sidebar me apni API Key dalein!")
   else:
-    with st.spinner("Analyzing machine screen and extracting parameters..."):
+    with st.spinner("Processing & extracting machine parameters rapidly..."):
       client = genai.Client(api_key=api_key)
+
+      # Compress image in memory for ultra-fast payload transfer
+      optimized_image_bytes = compress_image_for_fast_ai(active_image)
+
       prompt = """
             You are a senior clinical hematology technologist.
             Extract EVERY SINGLE lab test parameter and numerical value from this hematology analyzer or printout.
@@ -69,8 +94,7 @@ if active_image and st.button("Extract Data from Photo"):
               model=m_name,
               contents=[
                   types.Part.from_bytes(
-                      data=active_image.getvalue(),
-                      mime_type=active_image.type or "image/jpeg",
+                      data=optimized_image_bytes, mime_type="image/jpeg"
                   ),
                   prompt,
               ],
@@ -81,8 +105,8 @@ if active_image and st.button("Extract Data from Photo"):
           ).strip()
           st.session_state.extracted_tests = json.loads(cleaned_json)
           st.success(
-              f"Extracted all {len(st.session_state.extracted_tests)} parameters"
-              " successfully!"
+              f"⚡ Extracted all {len(st.session_state.extracted_tests)}"
+              " parameters instantly!"
           )
           success = True
           break
@@ -276,7 +300,7 @@ if st.session_state.extracted_tests:
       )
     idx += 1
 
-  # Auto-intelligent GBP morphology
+  # Intelligent GBP baseline logic
   try:
     hb_val = float(
         str(final_data.get("HGB", final_data.get("Hemoglobin", 13.5))).replace(
@@ -375,9 +399,7 @@ if st.session_state.extracted_tests:
         "ADVANCED PATHOLOGY & CLINICAL LABORATORY | AUTOMATED HEMATOLOGY &"
         " CYTOMORPHOLOGY",
     )
-    c.drawRightString(
-        width - 32, height - 35, f"Helpdesk: +91 {p_contact}"
-    )
+    c.drawRightString(width - 32, height - 35, f"Helpdesk: +91 {p_contact}")
 
     # 2. Patient Details Box
     c.setFillColor(colors.HexColor("#f8fafc"))
