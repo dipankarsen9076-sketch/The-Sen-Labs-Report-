@@ -1,7 +1,6 @@
 import io
 import json
 import re
-import time
 from datetime import datetime
 from google import genai
 from google.genai import types
@@ -43,10 +42,7 @@ if active_image and st.button("Extract Data from Photo"):
   if not api_key:
     st.error("Pehle sidebar me apni API Key dalein!")
   else:
-    with st.spinner(
-        "Analyzing machine screen and extracting all parameters (retrying if"
-        " busy)..."
-    ):
+    with st.spinner("Analyzing machine screen and extracting parameters..."):
       client = genai.Client(api_key=api_key)
       prompt = """
             You are a senior clinical hematology technologist.
@@ -63,21 +59,14 @@ if active_image and st.button("Extract Data from Photo"):
             Do not skip any line. No markdown formatting, no backticks.
             """
 
+      candidate_models = ["gemini-2.5-flash", "gemini-3.5-flash-lite"]
       success = False
       last_err = ""
 
-      # Try up to 3 automatic attempts if server is overloaded (503)
-      for attempt in range(1, 4):
+      for m_name in candidate_models:
         try:
           response = client.models.generate_content(
-              model="gemini-2.5-flash",
-              "gemini-2.5-flash-lite",
-              "gemini-2.0-flash",
-              "gemini-2.0-flash-lite",
-              "gemini-3.5-flash-lite",
-              "gemini-3.0-flash",
-              "gemini-3.5-flash-lite",
-              "gemini-3.0-flash-lite",
+              model=m_name,
               contents=[
                   types.Part.from_bytes(
                       data=active_image.getvalue(),
@@ -99,21 +88,16 @@ if active_image and st.button("Extract Data from Photo"):
           break
         except Exception as err:
           last_err = str(err)
-          if "503" in last_err or "UNAVAILABLE" in last_err:
-            time.sleep(2)  # Server buffer wait
-            continue
-          else:
-            break
+          continue
 
       if not success:
         st.error(
-            "Google Server par abhi high traffic hai. Kripya 5 second ruk kar"
-            f" dobara button dabayein. ({last_err[:90]}...)"
+            f"Extraction busy/error. Please click again. ({last_err[:90]}...)"
         )
 
-# Comprehensive Clinical Hematology Reference Database
+# Comprehensive Reference Database
 MASTER_REFS = {
-    "hgb":a {"name": "Hemoglobin (Hb)", "unit": "g/dL", "ref": "13.0 - 17.0"},
+    "hgb": {"name": "Hemoglobin (Hb)", "unit": "g/dL", "ref": "13.0 - 17.0"},
     "hemoglobin": {
         "name": "Hemoglobin (Hb)",
         "unit": "g/dL",
@@ -292,7 +276,7 @@ if st.session_state.extracted_tests:
       )
     idx += 1
 
-  # Auto-intelligent GBP generation based on values
+  # Auto-intelligent GBP morphology
   try:
     hb_val = float(
         str(final_data.get("HGB", final_data.get("Hemoglobin", 13.5))).replace(
