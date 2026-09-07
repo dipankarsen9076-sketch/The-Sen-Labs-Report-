@@ -49,7 +49,7 @@ if active_image and st.button("Extract Data from Photo"):
                 Do not include markdown triple backticks.
                 """
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-1.5-flash",
             contents=[
                 types.Part.from_bytes(
                     data=active_image.getvalue(), mime_type="image/jpeg"
