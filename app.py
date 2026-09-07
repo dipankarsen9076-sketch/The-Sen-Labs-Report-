@@ -1,5 +1,7 @@
+
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from PIL import Image
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -11,9 +13,7 @@ st.set_page_config(page_title="The Sen Labs", layout="centered")
 st.title("The Sen Labs - Diagnostic Reporting")
 
 # API Key handling
-api_key = st.secrets.get("GEMINI_API_KEY", "")
-if not api_key:
-    api_key = st.sidebar.text_input("Enter Gemini API Key", type="password")
+api_key = st.sidebar.text_input("Enter Gemini API Key", type="password")
 
 # Patient Information
 st.subheader("Patient Details")
@@ -38,13 +38,12 @@ if "extracted_tests" not in st.session_state:
 
 if active_image and st.button("Extract Data from Photo"):
     if not api_key:
-        st.error("Pehle sidebar me apni Gemini API Key dalein!")
+        st.error("Pehle sidebar me apni API Key dalein!")
     else:
         with st.spinner("Analyzing machine screen and reading values..."):
             try:
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                img = Image.open(active_image)
+                # Initialize GenAI Client with new auth token
+                client = genai.Client(api_key=api_key)
                 
                 prompt = """
                 Examine this laboratory analyzer display or printed slip.
@@ -52,7 +51,18 @@ if active_image and st.button("Extract Data from Photo"):
                 Output strictly a valid JSON object where keys are standard test names and values are strings/numbers.
                 Do not include markdown triple backticks.
                 """
-                response = model.generate_content([prompt, img])
+                
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=[
+                        types.Part.from_bytes(
+                            data=active_image.getvalue(),
+                            mime_type=active_image.type or "image/jpeg"
+                        ),
+                        prompt
+                    ]
+                )
+                
                 raw_text = response.text.strip()
                 cleaned_json = re.sub(r"^```json\s*|\s*```$", "", raw_text, flags=re.MULTILINE).strip()
                 st.session_state.extracted_tests = json.loads(cleaned_json)
@@ -113,7 +123,7 @@ if st.session_state.extracted_tests:
         buf.seek(0)
         
         st.download_button(
-            label="Download Pathology Report (PDF)",
+            label="📥 Download Pathology Report (PDF)",
             data=buf,
             file_name=f"{p_name.replace(' ', '_')}_Report.pdf",
             mime="application/pdf"
