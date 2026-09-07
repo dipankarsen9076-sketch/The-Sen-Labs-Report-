@@ -49,12 +49,12 @@ selected_profiles = st.multiselect(
 st.subheader("3. PDF Layout Preference")
 layout_choice = st.radio(
     "Report Formatting Mode:",
-    ("📄 Har Test Profile Alag Page Par (Separate Page Per Profile - Standard Hospital Multi-page)", 
-     "📑 Ek Sath Compact Flow (Fit All Profiles in Continuous Flow)"),
+    ("📄 Har Test Profile Alag Page Par (CBC+GBP Page 1 par ek sath, baki sab alag pages par)", 
+     "📑 Ek Sath Compact Flow (Sabhi Test Continuous Flow Mein)"),
     index=0,
     horizontal=True
 )
-separate_pages = "Separate Page Per Profile" in layout_choice
+separate_pages = "Har Test Profile Alag Page Par" in layout_choice
 
 def safe_float(val):
     try:
@@ -75,10 +75,10 @@ def compress_image_for_fast_ai(img_file):
 
 final_report_sections = {}
 
-# ----------------- SECTION 1: CBC + GBP -----------------
+# ----------------- SECTION 1: CBC + GBP (WITH AUTO ABSOLUTE COUNTS) -----------------
 if "Complete Blood Count (CBC + GBP)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🩸 Complete Blood Count (CBC) with Machine OCR")
+    st.subheader("🩸 Complete Blood Count (CBC) with Auto Absolute Calculations")
     
     cbc_source = st.radio("Choose Photo Source for CBC Analyzer:", ("📁 Upload Image / Slip", "📸 Live Camera"), horizontal=True)
     cbc_img = st.file_uploader("Upload machine screen or slip", type=["jpg", "jpeg", "png"], key="cbc_file") if cbc_source == "📁 Upload Image / Slip" else st.camera_input("Capture machine display", key="cbc_live")
@@ -122,21 +122,8 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         hgb = st.text_input("Hemoglobin (Hb)", value=str(c_raw.get("HGB", c_raw.get("Hemoglobin", ""))))
         rbc = st.text_input("Total RBC Count", value=str(c_raw.get("RBC", "")))
         hct = st.text_input("Hematocrit (PCV)", value=str(c_raw.get("HCT", c_raw.get("PCV", ""))))
-    with cbc_cols[1]:
-        wbc = st.text_input("Total WBC / TLC", value=str(c_raw.get("WBC", c_raw.get("TLC", ""))))
-        gran_p = st.text_input("Neutrophils / Gran (%)", value=str(c_raw.get("GRAN_PERCENT", "")))
-        lym_p = st.text_input("Lymphocytes (%)", value=str(c_raw.get("LYM_PERCENT", "")))
-        mid_p = st.text_input("Monocytes / Mid (%)", value=str(c_raw.get("MID_PERCENT", "")))
-    with cbc_cols[2]:
-        plt = st.text_input("Platelet Count (PLT)", value=str(c_raw.get("PLT", c_raw.get("Platelets", ""))))
-        mpv = st.text_input("MPV", value=str(c_raw.get("MPV", "")))
-        pdw = st.text_input("PDW", value=str(c_raw.get("PDW", "")))
-        pct = st.text_input("Plateletcrit (PCT)", value=str(c_raw.get("PCT", "")))
-        lpcr = st.text_input("P-LCR", value=str(c_raw.get("LPCR", "")))
-    with cbc_cols[3]:
-        rdwa = st.text_input("RDW - SD (RDWa)", value=str(c_raw.get("RDWA", "")))
-        rdw_cv = st.text_input("RDW - CV (%)", value=str(c_raw.get("RDW_PERCENT", "")))
         
+        # RBC Indices Formulas: MCV=(HCT*10)/RBC, MCH=(Hb*10)/RBC, MCHC=(Hb*100)/HCT
         hgb_f, rbc_f, hct_f = safe_float(hgb), safe_float(rbc), safe_float(hct)
         calc_mcv = str(c_raw.get("MCV", ""))
         calc_mch = str(c_raw.get("MCH", ""))
@@ -144,10 +131,50 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         if not calc_mcv and hct_f and rbc_f and rbc_f > 0: calc_mcv = f"{(hct_f * 10) / rbc_f:.1f}"
         if not calc_mch and hgb_f and rbc_f and rbc_f > 0: calc_mch = f"{(hgb_f * 10) / rbc_f:.1f}"
         if not calc_mchc and hgb_f and hct_f and hct_f > 0: calc_mchc = f"{(hgb_f * 100) / hct_f:.1f}"
-            
-        mcv = st.text_input("MCV (Calculated / Analyzer)", value=calc_mcv)
-        mch = st.text_input("MCH (Calculated / Analyzer)", value=calc_mch)
-        mchc = st.text_input("MCHC (Calculated / Analyzer)", value=calc_mchc)
+        
+        mcv = st.text_input("MCV", value=calc_mcv)
+        mch = st.text_input("MCH", value=calc_mch)
+        mchc = st.text_input("MCHC", value=calc_mchc)
+
+    with cbc_cols[1]:
+        wbc = st.text_input("Total WBC / TLC", value=str(c_raw.get("WBC", c_raw.get("TLC", ""))))
+        gran_p = st.text_input("Neutrophils / Gran (%)", value=str(c_raw.get("GRAN_PERCENT", "")))
+        lym_p = st.text_input("Lymphocytes (%)", value=str(c_raw.get("LYM_PERCENT", "")))
+        mid_p = st.text_input("Monocytes / Mid (%)", value=str(c_raw.get("MID_PERCENT", "")))
+
+        # ABSOLUTE COUNT CALCULATION FORMULAS: (TLC * Percentage) / 100
+        wbc_f = safe_float(wbc)
+        gran_p_f = safe_float(gran_p)
+        lym_p_f = safe_float(lym_p)
+        mid_p_f = safe_float(mid_p)
+
+        # Machine OCR check or Auto Math Calculation
+        calc_gran_abs = str(c_raw.get("GRAN_ABSOLUTE", c_raw.get("GRAN", "")))
+        if not calc_gran_abs and wbc_f and gran_p_f is not None:
+            calc_gran_abs = f"{(wbc_f * gran_p_f) / 100.0:.2f}"
+
+        calc_lym_abs = str(c_raw.get("LYM_ABSOLUTE", c_raw.get("LYM", "")))
+        if not calc_lym_abs and wbc_f and lym_p_f is not None:
+            calc_lym_abs = f"{(wbc_f * lym_p_f) / 100.0:.2f}"
+
+        calc_mid_abs = str(c_raw.get("MID_ABSOLUTE", c_raw.get("MID", "")))
+        if not calc_mid_abs and wbc_f and mid_p_f is not None:
+            calc_mid_abs = f"{(wbc_f * mid_p_f) / 100.0:.2f}"
+
+    with cbc_cols[2]:
+        gran_abs = st.text_input("Absolute Neutrophil Count (#)", value=calc_gran_abs)
+        lym_abs = st.text_input("Absolute Lymphocyte Count (#)", value=calc_lym_abs)
+        mid_abs = st.text_input("Absolute Monocyte/Mid Count (#)", value=calc_mid_abs)
+        st.info("✨ Absolute Counts calculated automatically using (WBC x %) / 100")
+
+    with cbc_cols[3]:
+        plt = st.text_input("Platelet Count (PLT)", value=str(c_raw.get("PLT", c_raw.get("Platelets", ""))))
+        mpv = st.text_input("MPV", value=str(c_raw.get("MPV", "")))
+        pdw = st.text_input("PDW", value=str(c_raw.get("PDW", "")))
+        pct = st.text_input("Plateletcrit (PCT)", value=str(c_raw.get("PCT", "")))
+        lpcr = st.text_input("P-LCR", value=str(c_raw.get("LPCR", "")))
+        rdwa = st.text_input("RDW - SD (RDWa)", value=str(c_raw.get("RDWA", "")))
+        rdw_cv = st.text_input("RDW - CV (%)", value=str(c_raw.get("RDW_PERCENT", "")))
 
     st.markdown("##### 🔬 GBP / Peripheral Smear Findings")
     g_col1, g_col2 = st.columns(2)
@@ -170,8 +197,11 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
             "RDW - CV": (rdw_cv, "Calculated", "%", "11.5 - 14.5", 11.5, 14.5),
             "Total Leukocyte Count (TLC)": (wbc, "Electrical Impedance", "10^3/uL", "4.0 - 10.0", 4.0, 10.0),
             "Granulocytes / Neutrophils (%)": (gran_p, "Impedance / Flow", "%", "40.0 - 70.0", 40.0, 70.0),
+            "Absolute Neutrophil Count (#)": (gran_abs, "Calculated (TLC x %)", "10^3/uL", "2.00 - 7.00", 2.00, 7.00),
             "Lymphocytes (%)": (lym_p, "Impedance / Flow", "%", "20.0 - 40.0", 20.0, 40.0),
+            "Absolute Lymphocyte Count (#)": (lym_abs, "Calculated (TLC x %)", "10^3/uL", "1.00 - 3.00", 1.00, 3.00),
             "Mid Cells / Monocytes (%)": (mid_p, "Impedance / Flow", "%", "2.0 - 8.0", 2.0, 8.0),
+            "Absolute Monocyte / Mid Count (#)": (mid_abs, "Calculated (TLC x %)", "10^3/uL", "0.10 - 0.80", 0.10, 0.80),
             "Platelet Count (PLT)": (plt, "Electrical Impedance", "10^3/uL", "150 - 450", 150.0, 450.0),
             "Mean Platelet Volume (MPV)": (mpv, "Calculated", "fL", "7.5 - 11.5", 7.5, 11.5),
             "Platelet Distribution Width (PDW)": (pdw, "Calculated", "%", "9.0 - 17.0", 9.0, 17.0),
@@ -282,7 +312,6 @@ if "Lipid Profile" in selected_profiles:
     }
 
 # ----------------- SEPARATE INDEPENDENT RAPID & SEROLOGY SECTIONS -----------------
-# 1. WIDAL
 if "Widal Agglutination Test" in selected_profiles:
     st.markdown("---")
     st.subheader("🌡️ Widal Agglutination Slide / Tube Test")
@@ -298,7 +327,6 @@ if "Widal Agglutination Test" in selected_profiles:
         "Salmonella paratyphi 'BH'": (wbh, "Slide Agglutination", "Titer", "Negative / Non-significant", None, None)
     }
 
-# 2. TYPHIDOT
 if "Typhidot (IgM / IgG)" in selected_profiles:
     st.markdown("---")
     st.subheader("🧪 Typhidot Rapid Card Test")
@@ -310,7 +338,6 @@ if "Typhidot (IgM / IgG)" in selected_profiles:
         "Typhidot IgG Antibody": (ty_g, "Immunochromatography", "Qualitative", "Non-Reactive", None, None)
     }
 
-# 3. MALARIA
 if "Malaria Card & Smear (MP)" in selected_profiles:
     st.markdown("---")
     st.subheader("🦟 Malaria Diagnostic Profile")
@@ -324,7 +351,6 @@ if "Malaria Card & Smear (MP)" in selected_profiles:
         "P. falciparum Antigen": (mp_pf, "Immunochromatography", "Card", "Negative", None, None)
     }
 
-# 4. GLUCOSE
 if "Blood Glucose" in selected_profiles:
     st.markdown("---")
     st.subheader("🍬 Blood Glucose Profile")
@@ -339,54 +365,54 @@ if "Blood Glucose" in selected_profiles:
     if glu_dict:
         final_report_sections["GLUCOSE"] = glu_dict
 
-# ----------------- KNOWLEDGE BASE FOR INDIVIDUAL PROFILES -----------------
+# ----------------- KNOWLEDGE BASE -----------------
 KNOWLEDGE_BASE = {
     "CBC": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: HEMATOLOGY PROFILE",
-        "significance": "Complete Blood Count (CBC) evaluates erythrocytes, leukocytes, and thrombocytes. It serves as a primary diagnostic screening tool for anemia, hematological malignancies, infections, systemic inflammation, and hemostatic status.",
-        "elevated": "ELEVATED (HIGH): Leukocytosis (>10.0x10^3/uL) is seen in acute bacterial infections, tissue necrosis, and leukemia. Erythrocytosis (High RBC/Hb) suggests polycythemia or hemoconcentration. Thrombocytosis (>450x10^3/uL) associates with chronic inflammation or myeloproliferative states.",
-        "decreased": "DECREASED (LOW): Anemia (Low Hb/RBC) results from nutritional deficiency (Iron, B12), blood loss, or marrow suppression. Leukopenia (<4.0x10^3/uL) indicates viral infection or autoimmune etiology. Thrombocytopenia (<150x10^3/uL) poses bleeding risks; common in Dengue and sepsis.",
-        "guidance": "RECOMMENDED CLINICAL ACTION: Low Hb requires Iron Profile (Serum Ferritin). In severe thrombocytopenia (<50x10^3/uL), screen for Dengue NS1/IgM, monitor bleeding signs, and avoid IM injections.",
-        "notes": "NOTE: Correlate automated counts with Peripheral Blood Smear (GBP) microscopy for morphology."
+        "significance": "Complete Blood Count (CBC) evaluates erythrocytes, leukocytes, and thrombocytes. Absolute counts provide the exact quantitative load of specific white cells in peripheral blood, offering superior clinical diagnostic accuracy over percentage values.",
+        "elevated": "ELEVATED (HIGH): Absolute Neutrophilia (ANC > 7.0x10^3/uL) indicates acute bacterial infections, tissue necrosis, or severe physiological stress. Absolute Lymphocytosis (ALC > 3.0x10^3/uL) suggests viral infections (EBV, CMV), pertussis, or chronic lymphocytic leukemia (CLL).",
+        "decreased": "DECREASED (LOW): Absolute Neutropenia (ANC < 2.0x10^3/uL; severe < 0.5x10^3/uL) significantly predisposes to opportunistic infections, often seen after chemotherapy, septic shock, or autoimmune disease. Absolute Lymphopenia (< 1.0x10^3/uL) is noted in viral sepsis, immunodeficiency, or corticosteroid therapy.",
+        "guidance": "RECOMMENDED ACTION: In severe neutropenia (ANC < 1.0x10^3/uL), implement neutropenic precautions and evaluate bone marrow if persistent. In thrombocytopenia (<50x10^3/uL), screen for Dengue NS1/IgM and avoid intramuscular injections.",
+        "notes": "NOTE: Automated counts must be correlated with microscopic smear examination (GBP)."
     },
     "LFT": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: LIVER FUNCTION PROFILE",
         "significance": "Liver Function Tests (LFT) assess hepatic excretory function (Bilirubin), synthetic capability (Albumin, Total Protein), and hepatocellular integrity (Transaminases: AST/ALT, ALP).",
-        "elevated": "ELEVATED (HIGH): Hyperbilirubinemia occurs in hemolytic jaundice, acute hepatitis, and extrahepatic biliary obstruction. Markedly elevated SGOT & SGPT indicates acute viral or drug-induced liver injury. High ALP suggests cholestasis or bone disease.",
-        "decreased": "DECREASED (LOW): Hypoalbuminemia (<3.5 g/dL) is characteristic of chronic liver cirrhosis, severe malnutrition, or nephrotic protein loss. Inverted A:G ratio (<1.0) correlates with hepatic parenchymal disease.",
-        "guidance": "RECOMMENDED CLINICAL ACTION: For elevated transaminases, screen for Hepatitis B & C (HBsAg, Anti-HCV) and obtain USG Abdomen. Avoid alcohol and hepatotoxic drugs.",
+        "elevated": "ELEVATED (HIGH): Hyperbilirubinemia occurs in hemolytic jaundice, acute hepatitis, and extrahepatic biliary obstruction. Markedly elevated SGOT & SGPT indicates acute viral or drug-induced liver injury.",
+        "decreased": "DECREASED (LOW): Hypoalbuminemia (<3.5 g/dL) is characteristic of chronic cirrhosis, severe malnutrition, or nephrotic protein loss. Inverted A:G ratio (<1.0) correlates with hepatic parenchymal disease.",
+        "guidance": "RECOMMENDED ACTION: For elevated transaminases, screen for Hepatitis B & C (HBsAg, Anti-HCV) and obtain USG Abdomen. Avoid alcohol and hepatotoxic medications.",
         "notes": "NOTE: Mild transient elevations can occur following strenuous exercise or heavy lipid meals."
     },
     "KFT": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: RENAL FUNCTION PROFILE",
         "significance": "Kidney Function Tests evaluate glomerular filtration efficiency, renal tubular reabsorption, and systemic fluid-electrolyte balance.",
-        "elevated": "ELEVATED (HIGH): Elevated Urea and Creatinine indicate acute kidney injury (AKI) or chronic kidney disease (CKD). High BUN-to-Creatinine ratio (>20:1) suggests pre-renal azotemia or dehydration. Hyperkalemia (>5.0 mEq/L) pre-disposes to cardiac arrhythmias. Hyperuricemia (>7.2 mg/dL) causes Gout.",
+        "elevated": "ELEVATED (HIGH): Elevated Urea and Creatinine indicate acute kidney injury (AKI) or chronic kidney disease (CKD). High BUN-to-Creatinine ratio (>20:1) suggests pre-renal azotemia or dehydration. Hyperkalemia (>5.0 mEq/L) pre-disposes to cardiac arrhythmias.",
         "decreased": "DECREASED (LOW): Hyponatremia (<135 mEq/L) causes neurological symptoms, seen in diuretic therapy or fluid overload. Hypokalemia (<3.5 mEq/L) leads to muscle weakness and cardiac arrhythmias.",
-        "guidance": "RECOMMENDED CLINICAL ACTION: Ensure adequate hydration, check 24-hr urinary protein, and obtain USG KUB. For Hyperkalemia (>5.5 mEq/L), obtain an urgent 12-lead ECG and consult Nephrologist.",
-        "notes": "NOTE: Serum Creatinine levels reflect muscle mass; correlate with GFR."
+        "guidance": "RECOMMENDED ACTION: Ensure adequate hydration, check 24-hr urinary protein, and obtain USG KUB. For Hyperkalemia (>5.5 mEq/L), obtain an urgent 12-lead ECG and consult Nephrologist.",
+        "notes": "NOTE: Serum Creatinine levels reflect muscle mass; correlate with clinical status."
     },
     "LIPID": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: LIPID PROFILE",
         "significance": "Lipid Profile assesses circulating atherogenic and protective lipoproteins to estimate 10-year risk of Atherosclerotic Cardiovascular Disease (ASCVD), CAD, and stroke.",
-        "elevated": "ELEVATED (HIGH): Elevated LDL-C and Total Cholesterol accelerate coronary plaque formation. High Triglycerides (>150 mg/dL, especially >500 mg/dL) heighten risks of acute pancreatitis and metabolic syndrome.",
+        "elevated": "ELEVATED (HIGH): Elevated LDL-C and Total Cholesterol accelerate coronary plaque formation. High Triglycerides (>150 mg/dL, especially >500 mg/dL) heighten risks of acute pancreatitis.",
         "decreased": "DECREASED (LOW): Low HDL-C (<40 mg/dL) represents an independent risk factor for premature coronary artery disease due to compromised reverse cholesterol transport.",
-        "guidance": "RECOMMENDED CLINICAL ACTION: Adopt Therapeutic Lifestyle Changes (TLC) — reduce dietary saturated fats, 150 min/week moderate aerobic exercise. Consider statin therapy if indicated.",
+        "guidance": "RECOMMENDED ACTION: Adopt Therapeutic Lifestyle Changes (TLC) — reduce dietary saturated fats, 150 min/week moderate aerobic exercise. Consider statin therapy if indicated.",
         "notes": "NOTE: Requires strict 10-12 hours overnight fasting. Friedewald LDL valid only when TG < 400 mg/dL."
     },
     "WIDAL": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: WIDAL AGGLUTINATION PROFILE",
         "significance": "Widal test measures circulating agglutinating antibodies against Lipopolysaccharide O and Flagellar H antigens of Salmonella enterica serotypes Typhi and Paratyphi.",
         "elevated": "INTERPRETATION: Titers >= 1:80 for 'O' antigen and >= 1:160 for 'H' antigen are considered clinically significant for active Enteric (Typhoid) fever in endemic regions.",
-        "decreased": "LIMITATIONS: Low baseline titers (1:20, 1:40) are common in healthy individuals in endemic zones. A negative test does not rule out typhoid if tested in early bacteremic stage (first week).",
-        "guidance": "RECOMMENDED CLINICAL ACTION: Blood culture is the gold standard diagnostic method during 1st week of fever. Initiate targeted antibiotic therapy as per clinician advice.",
+        "decreased": "LIMITATIONS: Low baseline titers (1:20, 1:40) are common in healthy individuals in endemic zones. A negative test does not rule out typhoid if tested in early bacteremic stage.",
+        "guidance": "RECOMMENDED ACTION: Blood culture is the gold standard diagnostic method during 1st week of fever. Initiate targeted antibiotic therapy as per clinician advice.",
         "notes": "NOTE: Previous TAB vaccination or past infection can cause anamnestic false-positive H titers."
     },
     "TYPHIDOT": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: TYPHIDOT (IgM / IgG) RAPID TEST",
         "significance": "Typhidot detects specific IgM and IgG antibodies against outer membrane protein (OMP) of Salmonella typhi, enabling differential identification of acute vs past/carrier infection.",
-        "elevated": "INTERPRETATION: Positive IgM indicates early, acute typhoid infection (detectable from day 2-3 of fever). Positive IgG alone indicates past infection or carrier state. Both IgM & IgG positive indicates middle/re-infection phase.",
+        "elevated": "INTERPRETATION: Positive IgM indicates early, acute typhoid infection (detectable from day 2-3 of fever). Positive IgG alone indicates past infection or carrier state.",
         "decreased": "LIMITATIONS: Non-reactive result in early fever does not completely rule out enteric fever; repeat testing advised after 48-72 hours if symptoms persist.",
-        "guidance": "RECOMMENDED CLINICAL ACTION: Positive IgM indicates acute enteric fever. Correlate with CBC (leukopenia/neutropenia is common). Follow physician's antibiotic protocol.",
+        "guidance": "RECOMMENDED ACTION: Positive IgM indicates acute enteric fever. Correlate with CBC (leukopenia/neutropenia is common). Follow physician's antibiotic protocol.",
         "notes": "NOTE: Higher sensitivity and specificity than conventional slide Widal in early fever."
     },
     "MALARIA": {
@@ -394,7 +420,7 @@ KNOWLEDGE_BASE = {
         "significance": "Combines high-resolution Romanowsky (Leishman/Giemsa) microscopy with qualitative immunochromatographic detection of histidine-rich protein II (HRP-2) and plasmodium lactate dehydrogenase (pLDH).",
         "elevated": "INTERPRETATION: Demonstration of trophozoites, schizonts, or gametocytes confirms active Malaria. Differentiation between Plasmodium vivax and Plasmodium falciparum is critical for treatment.",
         "decreased": "LIMITATIONS: Low parasitemia (<50 parasites/uL) may be missed on a single smear. Repeated thick & thin smear examination at 12-hour intervals during pyrexia spike is recommended.",
-        "guidance": "RECOMMENDED CLINICAL ACTION: Immediate species-specific therapy: ACT (Artemisinin-based combination) for P. falciparum; Chloroquine + Primaquine for P. vivax. Monitor platelet count.",
+        "guidance": "RECOMMENDED ACTION: Immediate species-specific therapy: ACT for P. falciparum; Chloroquine + Primaquine for P. vivax. Monitor platelet count closely.",
         "notes": "NOTE: P. falciparum can progress rapidly to complicated/cerebral malaria; treat urgently."
     },
     "GLUCOSE": {
@@ -402,7 +428,7 @@ KNOWLEDGE_BASE = {
         "significance": "Evaluates carbohydrate metabolism and pancreatic endocrine function. Diagnoses impaired glucose tolerance, Type 1 & 2 Diabetes Mellitus, and hypoglycemia.",
         "elevated": "INTERPRETATION: Fasting Blood Sugar >= 126 mg/dL or Post Prandial / Random >= 200 mg/dL on repeated testing meets diagnostic criteria for Diabetes Mellitus.",
         "decreased": "HYPOGLYCEMIA: Values < 70 mg/dL indicate hypoglycemia, which requires immediate corrective glucose intake to avoid neuroglycopenic symptoms.",
-        "guidance": "RECOMMENDED CLINICAL ACTION: Obtain Glycated Hemoglobin (HbA1c) to evaluate 3-month average glycemic control. Advise dietary modifications and lifestyle intervention.",
+        "guidance": "RECOMMENDED ACTION: Obtain Glycated Hemoglobin (HbA1c) to evaluate 3-month average glycemic control. Advise dietary modifications and lifestyle intervention.",
         "notes": "NOTE: Fasting requires 8-10 hours without caloric intake. PPBS requires sample collection exactly 2 hours after meal."
     }
 }
@@ -477,12 +503,12 @@ class PDFReportManager:
         self.curr_y = self.height - 134
 
     def print_wrapped_text(self, prefix, text, start_y, max_width=530):
-        self.c.setFont("Helvetica-Bold", 6.3)
+        self.c.setFont("Helvetica-Bold", 6.2)
         self.c.setFillColor(colors.HexColor("#0f172a"))
         self.c.drawString(42, start_y, prefix)
         
-        p_w = self.c.stringWidth(prefix, "Helvetica-Bold", 6.3) + 4
-        self.c.setFont("Helvetica", 6.2)
+        p_w = self.c.stringWidth(prefix, "Helvetica-Bold", 6.2) + 4
+        self.c.setFont("Helvetica", 6.0)
         self.c.setFillColor(colors.HexColor("#334155"))
         
         words = text.split(" ")
@@ -493,16 +519,16 @@ class PDFReportManager:
         for word in words:
             test_line = line + (" " if line else "") + word
             limit = (max_width - p_w) if first_line else max_width
-            if self.c.stringWidth(test_line, "Helvetica", 6.2) < limit:
+            if self.c.stringWidth(test_line, "Helvetica", 6.0) < limit:
                 line = test_line
             else:
                 self.c.drawString(42 + (p_w if first_line else 0), y, line)
-                y -= 8.2
+                y -= 8.0
                 line = word
                 first_line = False
         if line:
             self.c.drawString(42 + (p_w if first_line else 0), y, line)
-            y -= 8.2
+            y -= 8.0
             
         return y
 
@@ -511,43 +537,135 @@ class PDFReportManager:
             return
             
         kb = KNOWLEDGE_BASE[section_key]
-        box_top = self.curr_y - 6
-        box_height = box_top - 66
-        if box_height < 60:
+        box_top = self.curr_y - 4
+        box_height = box_top - 64
+        if box_height < 45:
             return
 
         self.c.setFillColor(colors.HexColor("#f8fafc"))
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
-        self.c.roundRect(32, 66, self.width - 64, box_height, 3, fill=True, stroke=True)
+        self.c.roundRect(32, 64, self.width - 64, box_height, 3, fill=True, stroke=True)
 
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
-        self.c.rect(32, box_top - 12, self.width - 64, 12, fill=True, stroke=False)
+        self.c.rect(32, box_top - 11, self.width - 64, 11, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
-        self.c.setFont("Helvetica-Bold", 6.7)
-        self.c.drawString(40, box_top - 9, kb["title"])
+        self.c.setFont("Helvetica-Bold", 6.5)
+        self.c.drawString(40, box_top - 8.5, kb["title"])
 
-        y = box_top - 20
+        y = box_top - 18
         y = self.print_wrapped_text("Clinical Significance: ", kb["significance"], y)
-        y -= 1.5
+        y -= 1.0
         
-        if y > 115:
+        if y > 110:
             y = self.print_wrapped_text("High Findings (Elevated): ", kb["elevated"], y)
-            y -= 1.5
+            y -= 1.0
             
-        if y > 98:
+        if y > 95:
             y = self.print_wrapped_text("Low Findings (Decreased): ", kb["decreased"], y)
-            y -= 1.5
+            y -= 1.0
             
-        if y > 82:
+        if y > 80:
             y = self.print_wrapped_text("Recommended Action: ", kb["guidance"], y)
-            y -= 1.5
+            y -= 1.0
             
-        if y > 72:
-            self.c.setFont("Helvetica-Oblique", 5.8)
+        if y > 70:
+            self.c.setFont("Helvetica-Oblique", 5.6)
             self.c.setFillColor(colors.HexColor("#64748b"))
             self.c.drawString(42, y, kb["notes"][:140])
 
         self.curr_y = 62
+
+    # CBC + GBP TOGETHER ON PAGE 1
+    def print_cbc_and_gbp_together(self, cbc_items, gbp_data):
+        active_rows = {k: v for k, v in cbc_items.items() if str(v[0]).strip() != ""}
+        
+        # Dept Banner
+        self.c.setFillColor(colors.HexColor("#0f766e"))
+        self.c.rect(32, self.curr_y - 12, self.width - 64, 12, fill=True, stroke=False)
+        self.c.setFillColor(colors.white)
+        self.c.setFont("Helvetica-Bold", 7)
+        self.c.drawString(38, self.curr_y - 9, "COMPLETE BLOOD COUNT (AUTOMATED HEMATOLOGY WITH ABSOLUTE INDICES)")
+
+        # Table Header
+        self.c.setFillColor(colors.HexColor("#e2e8f0"))
+        self.c.rect(32, self.curr_y - 23, self.width - 64, 11, fill=True, stroke=False)
+        self.c.setFillColor(colors.HexColor("#0f172a"))
+        self.c.setFont("Helvetica-Bold", 6.4)
+        self.c.drawString(38, self.curr_y - 20, "TEST / INVESTIGATION")
+        self.c.drawString(195, self.curr_y - 20, "TEST METHOD")
+        self.c.drawString(315, self.curr_y - 20, "RESULT")
+        self.c.drawString(410, self.curr_y - 20, "UNIT")
+        self.c.drawString(455, self.curr_y - 20, "REFERENCE INTERVAL")
+
+        y = self.curr_y - 32
+        # Calibrated 9.4pt row height so all 20 parameters fit cleanly in top half
+        for param, (val, method, unit, ref, low_val, high_val) in active_rows.items():
+            val_str = str(val).strip()
+            v_num = safe_float(val_str)
+            is_abnormal = False
+            flag_suffix = ""
+
+            if v_num is not None:
+                if low_val is not None and v_num < low_val:
+                    is_abnormal = True
+                    flag_suffix = " (L) ▼"
+                elif high_val is not None and v_num > high_val:
+                    is_abnormal = True
+                    flag_suffix = " (H) ▲"
+
+            self.c.setFont("Helvetica", 6.2)
+            self.c.setFillColor(colors.HexColor("#0f172a"))
+            self.c.drawString(38, y, str(param)[:34])
+            
+            self.c.setFont("Helvetica-Oblique", 5.6)
+            self.c.setFillColor(colors.HexColor("#64748b"))
+            self.c.drawString(195, y, str(method)[:24])
+
+            if is_abnormal:
+                self.c.setFont("Helvetica-Bold", 6.4)
+                self.c.setFillColor(colors.HexColor("#b91c1c"))
+                self.c.drawString(315, y, f"{val_str[:20]}{flag_suffix}")
+            else:
+                self.c.setFont("Helvetica", 6.2)
+                self.c.setFillColor(colors.HexColor("#0f172a"))
+                self.c.drawString(315, y, str(val_str)[:20])
+
+            self.c.setFont("Helvetica", 6.2)
+            self.c.setFillColor(colors.HexColor("#0f172a"))
+            self.c.drawString(410, y, str(unit)[:8])
+            self.c.drawString(455, y, str(ref)[:25])
+
+            self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
+            self.c.line(32, y - 1.5, self.width - 32, y - 1.5)
+            y -= 9.4
+
+        # GBP Section on SAME PAGE directly under CBC table
+        gbp_top = y - 3
+        self.c.setFillColor(colors.HexColor("#1e3a8a"))
+        self.c.rect(32, gbp_top, self.width - 64, 10, fill=True, stroke=False)
+        self.c.setFillColor(colors.white)
+        self.c.setFont("Helvetica-Bold", 6.5)
+        self.c.drawString(38, gbp_top + 2.5, "GENERAL BLOOD PICTURE (PERIPHERAL BLOOD SMEAR EXAMINATION)")
+
+        box_top = gbp_top - 1
+        self.c.setFillColor(colors.HexColor("#f8fafc"))
+        self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
+        self.c.rect(32, box_top - 36, self.width - 64, 36, fill=True, stroke=True)
+
+        gy = box_top - 7.5
+        for label, txt in [("RBC Morphology", gbp_data["rbc"]), ("WBC Morphology", gbp_data["wbc"]), ("Platelets on Smear", gbp_data["plt"]), ("Smear Impression", gbp_data["imp"])]:
+            self.c.setFont("Helvetica-Bold", 6.0)
+            self.c.setFillColor(colors.HexColor("#0f172a"))
+            self.c.drawString(38, gy, f"{label}:")
+            self.c.setFont("Helvetica", 6.0)
+            self.c.setFillColor(colors.HexColor("#334155"))
+            self.c.drawString(125, gy, txt[:105])
+            gy -= 8.2
+            
+        self.curr_y = box_top - 41
+        
+        # Clinical Guidance Box filling bottom area on same page
+        self.print_knowledge_box("CBC")
 
     def print_section(self, section_key, title, data_dict, bar_hex, is_first_on_page=False):
         active_rows = {k: v for k, v in data_dict.items() if str(v[0]).strip() != ""}
@@ -568,7 +686,7 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, title)
 
-        # Table Header with calibrated coordinates (Zero overlapping)
+        # Table Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 25, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
@@ -597,17 +715,14 @@ class PDFReportManager:
                 is_abnormal = True
                 flag_suffix = " *"
 
-            # Test Name
             self.c.setFont("Helvetica", 6.8)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(38, y, str(param)[:32])
             
-            # Method
             self.c.setFont("Helvetica-Oblique", 6.2)
             self.c.setFillColor(colors.HexColor("#64748b"))
             self.c.drawString(195, y, str(method)[:24])
 
-            # Result (Spaced out properly at 315)
             if is_abnormal:
                 self.c.setFont("Helvetica-Bold", 6.8)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
@@ -617,7 +732,6 @@ class PDFReportManager:
                 self.c.setFillColor(colors.HexColor("#0f172a"))
                 self.c.drawString(315, y, str(val_str)[:24])
 
-            # Unit & Reference Interval
             self.c.setFont("Helvetica", 6.8)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(410, y, str(unit)[:8])
@@ -627,39 +741,10 @@ class PDFReportManager:
             self.c.line(32, y - 2, self.width - 32, y - 2)
             y -= 10.8
 
-        self.curr_y = y - 10
+        self.curr_y = y - 8
 
         if self.separate_pages_mode:
             self.print_knowledge_box(section_key)
-
-    def print_gbp_box(self, gbp_data):
-        if self.curr_y - 58 < 65:
-            self.new_page()
-
-        self.c.setFillColor(colors.HexColor("#1e3a8a"))
-        self.c.rect(32, self.curr_y - 10, self.width - 64, 11, fill=True, stroke=False)
-        self.c.setFillColor(colors.white)
-        self.c.setFont("Helvetica-Bold", 7)
-        self.c.drawString(38, self.curr_y - 7, "GENERAL BLOOD PICTURE (PERIPHERAL BLOOD SMEAR EXAMINATION)")
-        
-        box_top = self.curr_y - 11
-        self.c.setFillColor(colors.HexColor("#f8fafc"))
-        self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
-        self.c.rect(32, box_top - 44, self.width - 64, 44, fill=True, stroke=True)
-        
-        gy = box_top - 9
-        for label, txt in [("RBC Morphology", gbp_data["rbc"]), ("WBC Morphology", gbp_data["wbc"]), ("Platelets on Smear", gbp_data["plt"]), ("Smear Impression", gbp_data["imp"])]:
-            self.c.setFont("Helvetica-Bold", 6.6)
-            self.c.setFillColor(colors.HexColor("#0f172a"))
-            self.c.drawString(38, gy, f"{label}:")
-            self.c.setFont("Helvetica", 6.6)
-            self.c.setFillColor(colors.HexColor("#334155"))
-            self.c.drawString(125, gy, txt[:105])
-            gy -= 9.5
-        self.curr_y = box_top - 52
-
-        if self.separate_pages_mode:
-            self.print_knowledge_box("CBC")
 
     def finish(self):
         self.draw_footer()
@@ -684,10 +769,9 @@ else:
         doc = PDFReportManager(buf, p_info, separate_pages_mode=separate_pages)
         first_section = True
         
-        # 1. CBC
+        # 1. CBC + GBP (ALWAYS TOGETHER ON PAGE 1)
         if "CBC" in final_report_sections:
-            doc.print_section("CBC", "COMPLETE BLOOD COUNT (AUTOMATED HEMATOLOGY PROFILE)", final_report_sections["CBC"]["items"], "#0f766e", is_first_on_page=first_section)
-            doc.print_gbp_box(final_report_sections["CBC"]["gbp"])
+            doc.print_cbc_and_gbp_together(final_report_sections["CBC"]["items"], final_report_sections["CBC"]["gbp"])
             first_section = False
             
         # 2. LFT
@@ -705,7 +789,7 @@ else:
             doc.print_section("LIPID", "CLINICAL BIOCHEMISTRY - LIPID PROFILE", final_report_sections["LIPID"], "#be123c", is_first_on_page=first_section)
             first_section = False
 
-        # 5. Distinct Independent Serology Profiles
+        # 5. Distinct Independent Serology Profiles (Widal, Typhidot, Malaria)
         if "WIDAL" in final_report_sections:
             doc.print_section("WIDAL", "SEROLOGY - WIDAL AGGLUTINATION PROFILE", final_report_sections["WIDAL"], "#4338ca", is_first_on_page=first_section)
             first_section = False
