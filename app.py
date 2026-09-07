@@ -50,7 +50,7 @@ selected_profiles = st.multiselect(
     default=[],
 )
 
-# 3. Layout Preference (Har test alag page par ya ek sath)
+# 3. Layout Preference
 st.subheader("3. PDF Layout Preference")
 layout_choice = st.radio(
     "Report Formatting Mode:",
@@ -829,116 +829,199 @@ if "Blood Glucose" in selected_profiles:
 if serology_dict:
   final_report_sections["SEROLOGY"] = serology_dict
 
-
-def generate_profile_summary(section_key, active_items):
-  notes = []
-  abnormal_flags = []
-
-  for name, data in active_items.items():
-    val_str = str(data[0]).strip()
-    low_limit = data[4]
-    high_limit = data[5]
-    v_num = safe_float(val_str)
-
-    if v_num is not None:
-      if low_limit is not None and v_num < low_limit:
-        abnormal_flags.append(f"{name} is Decreased ({v_num})")
-      elif high_limit is not None and v_num > high_limit:
-        abnormal_flags.append(f"{name} is Elevated ({v_num})")
-    elif (
-        "Positive" in val_str
-        or "Reactive" in val_str
-        or "seen" in val_str.lower()
-        or "1:160" in val_str
-        or "1:320" in val_str
-    ):
-      abnormal_flags.append(f"{name} is REACTIVE / POSITIVE")
-
-  if not abnormal_flags:
-    return (
-        "Clinical Note: Evaluated parameters are within biological reference"
-        " intervals. No immediate intervention required."
-    )
-
-  if section_key == "CBC":
-    notes.append("Clinical Impression: Alteration in hemogram noted.")
-    if any("Hemoglobin" in x and "Decreased" in x for x in abnormal_flags):
-      notes.append(
-          "Advice: Low Hb suggests Anemia. Recommend Iron profile (Ferritin)"
-          " and hematinic support."
-      )
-    if any("Platelet" in x and "Decreased" in x for x in abnormal_flags):
-      notes.append(
-          "Advice: Thrombocytopenia noted. Monitor platelet count and screen"
-          " for viral infections/dengue."
-      )
-    if any("Leukocyte" in x and "Elevated" in x for x in abnormal_flags):
-      notes.append(
-          "Advice: Leukocytosis indicates inflammatory or bacterial etiology."
-          " Correlate clinically."
-      )
-
-  elif section_key == "LFT":
-    notes.append("Clinical Impression: Hepatic enzyme/bilirubin elevation.")
-    if any("Bilirubin" in x and "Elevated" in x for x in abnormal_flags):
-      notes.append(
-        "Advice: Hyperbilirubinemia noted. Recommend USG Abdomen and Viral"
-        " Hepatitis screen."
-      )
-    if any(
-        ("SGOT" in x or "SGPT" in x) and "Elevated" in x for x in abnormal_flags
-    ):
-      notes.append(
-          "Advice: Elevated transaminases suggest hepatocellular injury."
-          " Avoid hepatotoxic substances."
-      )
-
-  elif section_key == "KFT":
-    notes.append("Clinical Impression: Renal function variation.")
-    if any(
-        ("Urea" in x or "Creatinine" in x) and "Elevated" in x
-        for x in abnormal_flags
-    ):
-      notes.append(
-          "Advice: Elevated Urea/Creatinine points to reduced renal clearance"
-          " or dehydration. Correlate fluid status."
-      )
-    if any("Uric Acid" in x and "Elevated" in x for x in abnormal_flags):
-      notes.append(
-          "Advice: Hyperuricemia noted. Advise hydration and low-purine diet."
-      )
-
-  elif section_key == "LIPID":
-    notes.append("Clinical Impression: Atherogenic dyslipidemia pattern.")
-    if any(
-        ("Cholesterol" in x or "Triglycerides" in x or "LDL" in x)
-        and "Elevated" in x
-        for x in abnormal_flags
-    ):
-      notes.append(
-          "Advice: Elevated atherogenic lipids. Advise lifestyle modification,"
-          " dietary control, and physician follow-up."
-      )
-
-  elif section_key == "SEROLOGY":
-    if any("Salmonella" in x for x in abnormal_flags):
-      notes.append(
-          "Advice: Significant Widal titer for Enteric (Typhoid) fever."
-          " Correlate with clinical history."
-      )
-    if any("Malaria" in x for x in abnormal_flags):
-      notes.append(
-          "Advice: Malarial parasite demonstrated. Initiate antimalarial"
-          " therapy under clinical supervision."
-      )
-
-  return (
-      " | ".join(notes)
-      if notes
-      else "Clinical Correlation: "
-      + ", ".join(abnormal_flags[:3])
-      + ". Advised physician consultation."
-  )
+# ----------------- DR. LAL LAB STYLE CLINICAL KNOWLEDGE BASE -----------------
+KNOWLEDGE_BASE = {
+    "CBC": {
+        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: HEMATOLOGY PROFILE",
+        "significance": (
+            "Complete Blood Count (CBC) evaluates cellular components of blood"
+            " (erythrocytes, leukocytes, and thrombocytes). It serves as a"
+            " primary diagnostic screening tool for anemia, hematological"
+            " malignancies, infections, systemic inflammation, and hemostatic"
+            " status."
+        ),
+        "elevated": (
+            "ELEVATED LEVELS (HIGH): Leukocytosis (High WBC) is seen in acute"
+            " bacterial infections, tissue necrosis, leukemia, and severe"
+            " physiological stress. Erythrocytosis (High RBC/Hb) suggests"
+            " polycythemia vera, chronic hypoxia, or hemoconcentration."
+            " Thrombocytosis (>450x10^3/uL) is associated with reactive post-splenectomy"
+            " states, chronic inflammation, or myeloproliferative disorders."
+        ),
+        "decreased": (
+            "DECREASED LEVELS (LOW): Anemia (Low Hb/RBC) results from"
+            " nutritional deficiency (Iron, B12, Folate), blood loss, chronic"
+            " disease, or bone marrow failure. Leukopenia (<4.0x10^3/uL) indicates"
+            " viral infections, autoimmune destruction, or bone marrow suppression."
+            " Thrombocytopenia (<150x10^3/uL) poses bleeding risks; common in"
+            " Dengue, ITP, sepsis, and drug-induced bone marrow suppression."
+        ),
+        "guidance": (
+            "RECOMMENDED CLINICAL ACTION: Low Hb requires Iron Profile (Serum"
+            " Ferritin, TIBC) or Vitamin B12/Folate assay. In severe"
+            " thrombocytopenia (<50x10^3/uL), screen for viral serology (Dengue"
+            " NS1/IgM), monitor bleeding signs, and avoid intramuscular injections."
+            " Repeat hemogram after 48-72 hours if counts are critical."
+        ),
+        "notes": (
+            "NOTE: Automated cell counts should be correlated with Peripheral"
+            " Blood Smear (GBP) microscopy for abnormal morphology, toxic"
+            " granulation, and nucleated RBCs."
+        ),
+    },
+    "LFT": {
+        "title": (
+            "CLINICAL SIGNIFICANCE & INTERPRETATION: LIVER FUNCTION PROFILE"
+        ),
+        "significance": (
+            "Liver Function Tests (LFT) assess hepatic excretory function"
+            " (Bilirubin), synthetic capability (Albumin, Total Protein), and"
+            " hepatocellular integrity (Transaminases: AST/ALT, ALP). Crucial"
+            " for diagnosing acute hepatitis, cirrhosis, and hepatobiliary"
+            " obstruction."
+        ),
+        "elevated": (
+            "ELEVATED LEVELS (HIGH): Hyperbilirubinemia (elevated direct/indirect)"
+            " occurs in hemolytic jaundice, acute hepatitis, and extrahepatic"
+            " biliary obstruction (cholelithiasis/choledocholithiasis). Markedly"
+            " elevated SGOT & SGPT (>5-10x normal) indicates acute viral"
+            " hepatitis, toxic/drug-induced liver injury, or ischemic hepatitis."
+            " Isolated elevation of ALP points towards cholestasis or bone disease."
+        ),
+        "decreased": (
+            "DECREASED LEVELS (LOW): Hypoalbuminemia (<3.5 g/dL) is characteristic"
+            " of chronic liver cirrhosis, severe malnutrition, nephrotic protein"
+            " loss, or protein-losing enteropathy. Inverted A:G ratio (<1.0)"
+            " strongly correlates with advanced hepatic parenchymal disease."
+        ),
+        "guidance": (
+            "RECOMMENDED CLINICAL ACTION: For elevated transaminases, screen for"
+            " Hepatitis B (HBsAg) & Hepatitis C (Anti-HCV), and perform Ultrasound"
+            " (USG) Whole Abdomen. Avoid alcohol, paracetamol overdoses, and"
+            " hepatotoxic drugs. In elevated ALP, correlate with Serum GGT to"
+            " confirm biliary origin."
+        ),
+        "notes": (
+            "NOTE: Hemolysis in specimen can falsely elevate AST and Total"
+            " Bilirubin. Mild transient elevations can occur following strenuous"
+            " exercise or heavy lipid meals."
+        ),
+    },
+    "KFT": {
+        "title": (
+            "CLINICAL SIGNIFICANCE & INTERPRETATION: RENAL FUNCTION PROFILE"
+        ),
+        "significance": (
+            "Kidney Function Tests evaluate glomerular filtration efficiency,"
+            " renal tubular reabsorption, and systemic fluid-electrolyte"
+            " balance. Serum Creatinine and Blood Urea are key indices of"
+            " nitrogenous waste excretion."
+        ),
+        "elevated": (
+            "ELEVATED LEVELS (HIGH): Elevated Blood Urea and Creatinine indicate"
+            " acute kidney injury (AKI), chronic kidney disease (CKD), or"
+            " post-renal urinary tract obstruction. High BUN-to-Creatinine ratio"
+            " (>20:1) suggests pre-renal azotemia, gastrointestinal bleeding, or"
+            " dehydration. Hyperkalemia (>5.0 mEq/L) is dangerous, predisposing"
+            " to cardiac arrhythmias. Hyperuricemia (>7.2 mg/dL) causes Gout and"
+            " urate nephrolithiasis."
+        ),
+        "decreased": (
+            "DECREASED LEVELS (LOW): Hyponatremia (<135 mEq/L) causes neurological"
+            " symptoms, commonly seen with diuretic therapy, SIADH, or fluid"
+            " overload. Hypokalemia (<3.5 mEq/L) leads to muscle weakness and"
+            " cardiac ectopic beats. Low Blood Urea occurs in severe liver failure"
+            " or low-protein malnutrition."
+        ),
+        "guidance": (
+            "RECOMMENDED CLINICAL ACTION: In elevated Creatinine/Urea, ensure"
+            " adequate hydration, check 24-hour urinary protein, and obtain"
+            " Ultrasound KUB (Kidney-Ureter-Bladder). For Hyperkalemia (>5.5"
+            " mEq/L), perform an urgent 12-lead ECG, restrict dietary potassium"
+            " (citrus fruits, bananas, coconut water), and consult a"
+            " Nephrologist immediately."
+        ),
+        "notes": (
+            "NOTE: Serum Creatinine depends on muscle mass and meat intake. In"
+            " muscular individuals, baseline creatinine may be near upper normal"
+            " limits."
+        ),
+    },
+    "LIPID": {
+        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: LIPID PROFILE",
+        "significance": (
+            "Lipid Profile assesses circulating atherogenic and protective"
+            " lipoproteins to estimate 10-year risk of Atherosclerotic"
+            " Cardiovascular Disease (ASCVD), coronary artery disease (CAD),"
+            " myocardial infarction, and stroke."
+        ),
+        "elevated": (
+            "ELEVATED LEVELS (HIGH): Hypercholesterolemia and elevated LDL-C"
+            " directly accelerate coronary plaque formation and arterial"
+            " stenosis. High Triglycerides (>150 mg/dL, especially >500 mg/dL)"
+            " significantly heighten risks of acute pancreatitis and metabolic"
+            " syndrome. Elevated Non-HDL Cholesterol (>130 mg/dL) represents"
+            " total atherogenic burden."
+        ),
+        "decreased": (
+            "DECREASED LEVELS (LOW): Low HDL-C (<40 mg/dL in males, <50 mg/dL"
+            " in females) represents an independent risk factor for premature"
+            " coronary disease due to compromised reverse cholesterol transport."
+        ),
+        "guidance": (
+            "RECOMMENDED CLINICAL ACTION: For elevated LDL-C / TC: Adopt"
+            " Therapeutic Lifestyle Changes (TLC) — reduce dietary saturated"
+            " fats and trans-fatty acids, engage in 150 min/week moderate aerobic"
+            " exercise, and achieve BMI < 23 kg/m². Consider statin therapy in"
+            " consultation with Physician/Cardiologist if LDL > 100 mg/dL with"
+            " comorbidities (diabetes/hypertension). Re-test after 8-12 weeks."
+        ),
+        "notes": (
+            "NOTE: Accurate lipid measurement requires strict 10-12 hours"
+            " overnight fasting. Friedewald LDL calculation is valid only when"
+            " Triglycerides are < 400 mg/dL."
+        ),
+    },
+    "SEROLOGY": {
+        "title": (
+            "CLINICAL SIGNIFICANCE & INTERPRETATION: SEROLOGY & INFECTIOUS"
+            " PROFILE"
+        ),
+        "significance": (
+            "Infectious disease serology identifies antigen-antibody interactions"
+            " to detect acute infection, convalescent immunity, or parasitic"
+            " infestation (Enteric Fever, Malarial Parasites, and Hyperglycemia)."
+        ),
+        "elevated": (
+            "INTERPRETATION: Widal titers >= 1:80 for 'O' antigen and >= 1:160"
+            " for 'H' antigen indicate probable acute Salmonella enterica (Typhoid)"
+            " infection. Typhidot IgM positivity confirms active/early infection,"
+            " whereas IgG suggests past infection or immunization. Malaria"
+            " antigen positivity (Pv/Pf) confirms plasmodial parasitemia."
+            " Fasting Blood Sugar > 126 mg/dL or PP > 200 mg/dL indicates Diabetes"
+            " Mellitus."
+        ),
+        "decreased": (
+            "LIMITATIONS: Low Widal titers (<1:40) are common in endemic regions"
+            " and should not be treated as diagnostic without clinical"
+            " correlation. A negative rapid antigen card does not rule out low-titer"
+            " submicroscopic parasitemia."
+        ),
+        "guidance": (
+            "RECOMMENDED CLINICAL ACTION: For positive Widal/Typhidot, initiate"
+            " targeted antibiotic therapy as per local antibiogram and physician"
+            " advise. For positive Malaria, initiate immediate species-specific"
+            " Antimalarial therapy (ACT for Pf; Chloroquine/Primaquine for Pv)."
+            " For elevated Blood Sugar, obtain HbA1c (Glycated Hemoglobin) for"
+            " 3-month glycemic control."
+        ),
+        "notes": (
+            "NOTE: Diagnosis of Enteric Fever should be confirmed by Blood"
+            " Culture during the first week of fever. Serological results must"
+            " be correlated with clinical presentation."
+        ),
+    },
+}
 
 
 # ----------------- SAFE MULTI-PAGE REPORT MANAGER CLASS -----------------
@@ -1023,6 +1106,96 @@ class PDFReportManager:
     self.draw_header()
     self.curr_y = self.height - 134
 
+  def print_wrapped_text(self, prefix, text, start_y, max_width=530):
+    self.c.setFont("Helvetica-Bold", 6.3)
+    self.c.setFillColor(colors.HexColor("#0f172a"))
+    self.c.drawString(42, start_y, prefix)
+
+    p_w = self.c.stringWidth(prefix, "Helvetica-Bold", 6.3) + 4
+    self.c.setFont("Helvetica", 6.2)
+    self.c.setFillColor(colors.HexColor("#334155"))
+
+    words = text.split(" ")
+    line = ""
+    y = start_y
+    first_line = True
+
+    for word in words:
+      test_line = line + (" " if line else "") + word
+      limit = max_width - p_w if first_line else max_width
+      if self.c.stringWidth(test_line, "Helvetica", 6.2) < limit:
+        line = test_line
+      else:
+        self.c.drawString(42 + (p_w if first_line else 0), y, line)
+        y -= 8.2
+        line = word
+        first_line = False
+    if line:
+      self.c.drawString(42 + (p_w if first_line else 0), y, line)
+      y -= 8.2
+
+    return y
+
+  def print_knowledge_box(self, section_key):
+    if section_key not in KNOWLEDGE_BASE:
+      return
+
+    kb = KNOWLEDGE_BASE[section_key]
+
+    # Calculate available vertical space down to signature line (y = 66)
+    box_top = self.curr_y - 8
+    box_height = box_top - 66
+    if box_height < 70:
+      return  # Space guard
+
+    # Outer Container Box
+    self.c.setFillColor(colors.HexColor("#f8fafc"))
+    self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
+    self.c.roundRect(
+        32, 66, self.width - 64, box_height, 3, fill=True, stroke=True
+    )
+
+    # Header Bar of Knowledge Box
+    self.c.setFillColor(colors.HexColor("#e2e8f0"))
+    self.c.rect(32, box_top - 12, self.width - 64, 12, fill=True, stroke=False)
+    self.c.setFillColor(colors.HexColor("#1e3a8a"))
+    self.c.setFont("Helvetica-Bold", 6.7)
+    self.c.drawString(40, box_top - 9, kb["title"])
+
+    y = box_top - 20
+    # 1. Clinical Significance
+    y = self.print_wrapped_text(
+        "Clinical Significance: ", kb["significance"], y
+    )
+    y -= 1.5
+
+    # 2. Elevated Levels
+    if y > 115:
+      y = self.print_wrapped_text(
+          "High Findings (Elevated): ", kb["elevated"], y
+      )
+      y -= 1.5
+
+    # 3. Decreased Levels
+    if y > 98:
+      y = self.print_wrapped_text("Low Findings (Decreased): ", kb["decreased"], y)
+      y -= 1.5
+
+    # 4. Clinical Advice & Actions
+    if y > 82:
+      y = self.print_wrapped_text(
+          "Recommended Action: ", kb["guidance"], y
+      )
+      y -= 1.5
+
+    # 5. Method Note
+    if y > 72:
+      self.c.setFont("Helvetica-Oblique", 5.8)
+      self.c.setFillColor(colors.HexColor("#64748b"))
+      self.c.drawString(42, y, kb["notes"][:140])
+
+    self.curr_y = 62
+
   def print_section(
       self, section_key, title, data_dict, bar_hex, is_first_on_page=False
   ):
@@ -1032,11 +1205,9 @@ class PDFReportManager:
     if not active_rows:
       return
 
-    # If user selected Separate Pages Mode and this is not the very first page
     if self.separate_pages_mode and not is_first_on_page:
       self.new_page()
     else:
-      # Compact mode: check if enough vertical space exists
       needed = 42 + (len(active_rows) * 11)
       if self.curr_y - needed < 65:
         self.new_page()
@@ -1050,8 +1221,7 @@ class PDFReportManager:
     self.c.setFont("Helvetica-Bold", 7)
     self.c.drawString(38, self.curr_y - 9, title)
 
-    # Table Header with calibrated non-overlapping columns
-    # Col X: 38 (Test), 200 (Method), 305 (Result), 390 (Unit), 440 (Range)
+    # Table Header
     self.c.setFillColor(colors.HexColor("#e2e8f0"))
     self.c.rect(
         32, self.curr_y - 25, self.width - 64, 12, fill=True, stroke=False
@@ -1085,17 +1255,14 @@ class PDFReportManager:
         is_abnormal = True
         flag_suffix = " *"
 
-      # Test Name
       self.c.setFont("Helvetica", 6.8)
       self.c.setFillColor(colors.HexColor("#0f172a"))
       self.c.drawString(38, y, str(param)[:34])
 
-      # Method
       self.c.setFont("Helvetica-Oblique", 6.2)
       self.c.setFillColor(colors.HexColor("#64748b"))
       self.c.drawString(200, y, str(method)[:22])
 
-      # Result with Bold red flag
       if is_abnormal:
         self.c.setFont("Helvetica-Bold", 6.8)
         self.c.setFillColor(colors.HexColor("#b91c1c"))
@@ -1105,7 +1272,6 @@ class PDFReportManager:
         self.c.setFillColor(colors.HexColor("#0f172a"))
         self.c.drawString(305, y, str(val_str)[:20])
 
-      # Unit & Reference Interval
       self.c.setFont("Helvetica", 6.8)
       self.c.setFillColor(colors.HexColor("#0f172a"))
       self.c.drawString(390, y, str(unit)[:10])
@@ -1115,20 +1281,11 @@ class PDFReportManager:
       self.c.line(32, y - 2, self.width - 32, y - 2)
       y -= 10.8
 
-    # Profile Guidance Box
-    summary_text = generate_profile_summary(section_key, active_rows)
-    y -= 2
-    self.c.setFillColor(colors.HexColor("#f8fafc"))
-    self.c.setStrokeColor(colors.HexColor("#e2e8f0"))
-    self.c.roundRect(32, y - 14, self.width - 64, 14, 2, fill=True, stroke=True)
-    self.c.setFont("Helvetica-Bold", 6.5)
-    self.c.setFillColor(colors.HexColor("#1e3a8a"))
-    self.c.drawString(36, y - 9, "Clinical Guidance:")
-    self.c.setFont("Helvetica", 6.2)
-    self.c.setFillColor(colors.HexColor("#334155"))
-    self.c.drawString(102, y - 9, summary_text[:115])
+    self.curr_y = y - 4
 
-    self.curr_y = y - 18
+    # Print Dr Lal Lab style Knowledge Base if Separate Page Mode is ON
+    if self.separate_pages_mode:
+      self.print_knowledge_box(section_key)
 
   def print_gbp_box(self, gbp_data):
     if self.curr_y - 58 < 65:
@@ -1166,6 +1323,10 @@ class PDFReportManager:
       self.c.drawString(125, gy, txt[:105])
       gy -= 9.5
     self.curr_y = box_top - 52
+
+    # If CBC is in separate page, fill bottom space with Hematology Knowledge Box
+    if self.separate_pages_mode:
+      self.print_knowledge_box("CBC")
 
   def finish(self):
     self.draw_footer()
