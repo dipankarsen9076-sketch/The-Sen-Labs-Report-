@@ -71,22 +71,43 @@ with c3:
     p_contact = st.text_input("Lab Contact / Helpline", value="9076816740")
     sample_id = st.text_input("Sample ID / Lab No.", value=f"TSL-{datetime.now().strftime('%y%m%d%H%M')}")
 
-# 2. Multi-Test Profile Selector
+# 2. Multi-Test Profile Selector (INDIVIDUAL + COMBO PROFILES)
 st.subheader("2. Select Test Profiles for Patient")
 selected_profiles = st.multiselect(
     "Select investigations prescribed for this patient:",
     [
+        # Routine Profiles
         "Complete Blood Count (CBC + GBP)",
         "Liver Function Test (LFT)",
         "Kidney Function Test (KFT / RFT)",
         "Lipid Profile",
-        "Dengue Serology Profile (NS1 / IgM / IgG)",
-        "Viral Marker & Screening (HIV / HBsAg / HCV / VDRL)",
-        "Inflammatory & Immunology (CRP / RA Factor)",
+        "Urine Routine & Microscopic Examination (Urine R/M)",
+        
+        # Dengue Options (Individual & Combo)
+        "Dengue NS1 Antigen (Single)",
+        "Dengue Profile Complete (NS1 + IgM + IgG)",
+
+        # Viral Markers (Individual & Combo)
+        "Viral Markers Complete (HIV + HBsAg + HCV + VDRL)",
+        "HIV 1 & 2 Antibody (Single)",
+        "HBsAg Hepatitis B (Single)",
+        "HCV Antibody Hepatitis C (Single)",
+        "VDRL / RPR Syphilis (Single)",
+
+        # Rheumatology & Immunology (Individual)
+        "C-Reactive Protein (CRP)",
+        "Rheumatoid Factor (RA / RF)",
+
+        # Single Biochemical Analytes (Individual)
+        "Serum Creatinine (Single)",
+        "Serum Uric Acid (Single)",
+        "Serum Total Calcium (Single)",
+
+        # Immunohematology & Pregnancy
         "Blood Group & Rh Type",
         "Urine Pregnancy Test (UPT)",
-        "Urine Routine & Microscopic Examination (Urine R/M)",
-        "Routine Biochemistry (Calcium / Uric Acid / Creatinine)",
+
+        # Infectious Disease Serology
         "Widal Agglutination Test",
         "Typhidot (IgM / IgG)",
         "Malaria Card & Smear (MP)",
@@ -125,7 +146,7 @@ def compress_image_for_fast_ai(img_file):
 
 final_report_sections = {}
 
-# ----------------- SECTION 1: CBC + GBP -----------------
+# ----------------- CBC + GBP -----------------
 if "Complete Blood Count (CBC + GBP)" in selected_profiles:
     st.markdown("---")
     st.subheader("🩸 Complete Blood Count (CBC) with Auto Absolute Calculations")
@@ -258,7 +279,7 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         "gbp": {"rbc": gbp_rbc, "wbc": gbp_wbc, "plt": gbp_plt, "imp": gbp_imp}
     }
 
-# ----------------- SECTION 2: LFT -----------------
+# ----------------- LFT -----------------
 if "Liver Function Test (LFT)" in selected_profiles:
     st.markdown("---")
     st.subheader("🧪 Liver Function Test (LFT) - Self Calculating")
@@ -298,7 +319,7 @@ if "Liver Function Test (LFT)" in selected_profiles:
         "A : G Ratio": (ag_ratio, "Calculated", "Ratio", "1.2 - 2.2", 1.2, 2.2)
     }
 
-# ----------------- SECTION 3: KFT -----------------
+# ----------------- KFT -----------------
 if "Kidney Function Test (KFT / RFT)" in selected_profiles:
     st.markdown("---")
     st.subheader("🫘 Kidney Function Test (KFT / RFT) - Self Calculating")
@@ -330,7 +351,7 @@ if "Kidney Function Test (KFT / RFT)" in selected_profiles:
         "Serum Chloride (Cl-)": (chlor, "ISE Direct", "mEq/L", "96 - 106", 96.0, 106.0)
     }
 
-# ----------------- SECTION 4: LIPID PROFILE -----------------
+# ----------------- LIPID PROFILE -----------------
 if "Lipid Profile" in selected_profiles:
     st.markdown("---")
     st.subheader("❤️ Lipid Profile - Self Calculating (Friedewald Equation)")
@@ -358,93 +379,154 @@ if "Lipid Profile" in selected_profiles:
         "Total Chol / HDL Ratio": (tc_hdl, "Calculated", "Ratio", "3.0 - 5.0", 3.0, 5.0)
     }
 
-# ----------------- SECTION 5: DENGUE SEROLOGY PROFILE -----------------
-if "Dengue Serology Profile (NS1 / IgM / IgG)" in selected_profiles:
+# ----------------- DENGUE OPTIONS (INDIVIDUAL & COMPLETE) -----------------
+if "Dengue NS1 Antigen (Single)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🦟 Dengue Serological Profile (NS1 Antigen & Antibodies)")
-    d_c1, d_c2, d_c3 = st.columns(3)
-    with d_c1:
-        dns1 = st.selectbox("Dengue NS1 Antigen (Day 1-5 Fever)", ["Negative", "Positive"], key="d_ns1")
-    with d_c2:
-        digm = st.selectbox("Dengue IgM Antibody (Primary Infection)", ["Negative", "Positive"], key="d_igm")
-    with d_c3:
-        digg = st.selectbox("Dengue IgG Antibody (Secondary/Past)", ["Negative", "Positive"], key="d_igg")
-
-    final_report_sections["DENGUE"] = {
-        "Dengue NS1 Antigen": (dns1, "Immunochromatography", "Qualitative", "Negative", None, None),
-        "Dengue IgM Antibody": (digm, "Immunochromatography", "Qualitative", "Negative", None, None),
-        "Dengue IgG Antibody": (digg, "Immunochromatography", "Qualitative", "Negative", None, None)
+    st.subheader("🦟 Dengue NS1 Antigen Test (Early Fever)")
+    dns1_s = st.selectbox("Dengue NS1 Antigen", ["Negative", "Positive"], key="d_ns1_single")
+    final_report_sections["DENGUE_NS1"] = {
+        "Dengue NS1 Antigen": (dns1_s, "Immunochromatography", "Qualitative", "Negative", None, None)
     }
 
-# ----------------- SECTION 6: VIRAL MARKER & SCREENING -----------------
-if "Viral Marker & Screening (HIV / HBsAg / HCV / VDRL)" in selected_profiles:
+if "Dengue Profile Complete (NS1 + IgM + IgG)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🛡️ Viral Marker & Infectious Screening")
-    vm_c1, vm_c2, vm_c3, vm_c4 = st.columns(4)
-    with vm_c1:
-        hiv = st.selectbox("HIV 1 & 2 Antibody", ["Non-Reactive", "Reactive"], key="vm_hiv")
-    with vm_c2:
-        hbsag = st.selectbox("Hepatitis B Surface Antigen (HBsAg)", ["Non-Reactive", "Reactive"], key="vm_hbs")
-    with vm_c3:
-        hcv = st.selectbox("HCV Antibody (Hepatitis C)", ["Non-Reactive", "Reactive"], key="vm_hcv")
-    with vm_c4:
-        vdrl = st.selectbox("VDRL / RPR (Syphilis)", ["Non-Reactive", "Reactive (1:8)", "Reactive (1:16)", "Reactive (1:32)"], key="vm_vdrl")
-
-    final_report_sections["VIRAL"] = {
-        "HIV 1 & 2 Antibodies": (hiv, "4th Gen Immunochromatography", "Screening", "Non-Reactive", None, None),
-        "Hepatitis B Surface Ag (HBsAg)": (hbsag, "Rapid Immunochromatography", "Screening", "Non-Reactive", None, None),
-        "HCV Antibody (Hepatitis C)": (hcv, "Rapid Immunochromatography", "Screening", "Non-Reactive", None, None),
-        "VDRL / RPR (Syphilis Screen)": (vdrl, "Flocculation / Agglutination", "Qualitative", "Non-Reactive", None, None)
+    st.subheader("🦟 Dengue Complete Profile (NS1 Antigen + IgM + IgG Antibodies)")
+    d1, d2, d3 = st.columns(3)
+    with d1: dns1_c = st.selectbox("Dengue NS1 Antigen", ["Negative", "Positive"], key="d_ns1_c")
+    with d2: digm_c = st.selectbox("Dengue IgM Antibody", ["Negative", "Positive"], key="d_igm_c")
+    with d3: digg_c = st.selectbox("Dengue IgG Antibody", ["Negative", "Positive"], key="d_igg_c")
+    final_report_sections["DENGUE_PROFILE"] = {
+        "Dengue NS1 Antigen": (dns1_c, "Immunochromatography", "Qualitative", "Negative", None, None),
+        "Dengue IgM Antibody": (digm_c, "Immunochromatography", "Qualitative", "Negative", None, None),
+        "Dengue IgG Antibody": (digg_c, "Immunochromatography", "Qualitative", "Negative", None, None)
     }
 
-# ----------------- SECTION 7: INFLAMMATORY & IMMUNOLOGY (CRP / RA) -----------------
-if "Inflammatory & Immunology (CRP / RA Factor)" in selected_profiles:
+# ----------------- VIRAL MARKER (INDIVIDUAL & COMPLETE 4-IN-1) -----------------
+if "Viral Markers Complete (HIV + HBsAg + HCV + VDRL)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🔬 Inflammatory & Rheumatology Serology")
-    inf_c1, inf_c2 = st.columns(2)
-    with inf_c1:
-        crp_type = st.radio("CRP Reporting Mode:", ["Semi-Quantitative (mg/L)", "Qualitative Latex"], horizontal=True)
-        if "Semi-Quantitative" in crp_type:
-            crp_val = st.text_input("C-Reactive Protein (CRP) (mg/L)", value="< 6.0")
+    st.subheader("🛡️ Complete Viral Markers Battery (4-in-1)")
+    v1, v2, v3, v4 = st.columns(4)
+    with v1: v_hiv = st.selectbox("HIV 1 & 2 Antibody", ["Non-Reactive", "Reactive"], key="vm_hiv_c")
+    with v2: v_hbs = st.selectbox("HBsAg (Hepatitis B)", ["Non-Reactive", "Reactive"], key="vm_hbs_c")
+    with v3: v_hcv = st.selectbox("HCV Antibody (Hepatitis C)", ["Non-Reactive", "Reactive"], key="vm_hcv_c")
+    with v4: v_vdrl = st.selectbox("VDRL / RPR (Syphilis)", ["Non-Reactive", "Reactive (1:8)", "Reactive (1:16)"], key="vm_vdrl_c")
+    final_report_sections["VIRAL_PROFILE"] = {
+        "HIV 1 & 2 Antibodies": (v_hiv, "4th Gen Immunochromatography", "Screening", "Non-Reactive", None, None),
+        "HBsAg (Hepatitis B)": (v_hbs, "Immunochromatography", "Screening", "Non-Reactive", None, None),
+        "HCV Antibody (Hepatitis C)": (v_hcv, "Immunochromatography", "Screening", "Non-Reactive", None, None),
+        "VDRL / RPR (Syphilis Screen)": (v_vdrl, "Flocculation / Card", "Qualitative", "Non-Reactive", None, None)
+    }
+
+if "HIV 1 & 2 Antibody (Single)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🛡️ HIV 1 & 2 Antibody Screening")
+    s_hiv = st.selectbox("HIV 1 & 2 Antibody Result", ["Non-Reactive", "Reactive"], key="s_hiv_val")
+    final_report_sections["HIV_SINGLE"] = {
+        "HIV 1 & 2 Antibodies": (s_hiv, "4th Gen Immunochromatography", "Screening", "Non-Reactive", None, None)
+    }
+
+if "HBsAg Hepatitis B (Single)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🛡️ Hepatitis B Surface Antigen (HBsAg)")
+    s_hbs = st.selectbox("HBsAg Result", ["Non-Reactive", "Reactive"], key="s_hbs_val")
+    final_report_sections["HBSAG_SINGLE"] = {
+        "HBsAg (Hepatitis B Surface Antigen)": (s_hbs, "Immunochromatography", "Screening", "Non-Reactive", None, None)
+    }
+
+if "HCV Antibody Hepatitis C (Single)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🛡️ Hepatitis C Virus (HCV) Antibody")
+    s_hcv = st.selectbox("HCV Antibody Result", ["Non-Reactive", "Reactive"], key="s_hcv_val")
+    final_report_sections["HCV_SINGLE"] = {
+        "HCV Antibody (Hepatitis C)": (s_hcv, "Immunochromatography", "Screening", "Non-Reactive", None, None)
+    }
+
+if "VDRL / RPR Syphilis (Single)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🛡️ VDRL / RPR Serological Test for Syphilis")
+    s_vdrl = st.selectbox("VDRL / RPR Result", ["Non-Reactive", "Reactive (1:8)", "Reactive (1:16)", "Reactive (1:32)"], key="s_vdrl_val")
+    final_report_sections["VDRL_SINGLE"] = {
+        "VDRL / RPR (Syphilis Screen)": (s_vdrl, "Flocculation / Card", "Qualitative", "Non-Reactive", None, None)
+    }
+
+# ----------------- INFLAMMATORY (CRP & RA SEPARATE) -----------------
+if "C-Reactive Protein (CRP)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🔬 C-Reactive Protein (CRP) - Acute Phase Reactant")
+    c_m1, c_m2 = st.columns(2)
+    with c_m1: crp_mode = st.radio("CRP Value Mode:", ["Semi-Quantitative (mg/L)", "Qualitative Latex"], horizontal=True, key="crp_mode")
+    with c_m2:
+        if "Semi-Quantitative" in crp_mode:
+            crp_input = st.text_input("CRP Result (mg/L)", value="< 6.0", key="crp_in")
         else:
-            crp_val = st.selectbox("C-Reactive Protein (CRP)", ["Negative (< 6 mg/L)", "Positive (>= 6 mg/L)"])
-    with inf_c2:
-        ra_type = st.radio("RA Factor Reporting Mode:", ["Semi-Quantitative (IU/mL)", "Qualitative Latex"], horizontal=True)
-        if "Semi-Quantitative" in ra_type:
-            ra_val = st.text_input("Rheumatoid Factor (RA) (IU/mL)", value="< 8.0")
-        else:
-            ra_val = st.selectbox("Rheumatoid Factor (RA)", ["Negative (< 8 IU/mL)", "Positive (>= 8 IU/mL)"])
-
-    final_report_sections["INFLAMMATORY"] = {
-        "C-Reactive Protein (CRP)": (crp_val, "Latex Agglutination / Turbidimetry", "mg/L", "< 6.0 (Negative)", 0.0, 6.0),
-        "Rheumatoid Factor (RA / RF)": (ra_val, "Latex Agglutination / Turbidimetry", "IU/mL", "< 8.0 (Negative)", 0.0, 8.0)
+            crp_input = st.selectbox("CRP Result", ["Negative (< 6.0 mg/L)", "Positive (>= 6.0 mg/L)"], key="crp_sel")
+    final_report_sections["CRP_SINGLE"] = {
+        "C-Reactive Protein (CRP)": (crp_input, "Latex Agglutination / Turbidimetry", "mg/L", "< 6.0 (Negative)", 0.0, 6.0)
     }
 
-# ----------------- SECTION 8: BLOOD GROUP & RH TYPE -----------------
+if "Rheumatoid Factor (RA / RF)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🔬 Rheumatoid Factor (RA / RF) Serology")
+    ra_m1, ra_m2 = st.columns(2)
+    with ra_m1: ra_mode = st.radio("RA Factor Value Mode:", ["Semi-Quantitative (IU/mL)", "Qualitative Latex"], horizontal=True, key="ra_mode")
+    with ra_m2:
+        if "Semi-Quantitative" in ra_mode:
+            ra_input = st.text_input("RA Factor Result (IU/mL)", value="< 8.0", key="ra_in")
+        else:
+            ra_input = st.selectbox("RA Factor Result", ["Negative (< 8.0 IU/mL)", "Positive (>= 8.0 IU/mL)"], key="ra_sel")
+    final_report_sections["RA_SINGLE"] = {
+        "Rheumatoid Factor (RA / RF)": (ra_input, "Latex Agglutination / Turbidimetry", "IU/mL", "< 8.0 (Negative)", 0.0, 8.0)
+    }
+
+# ----------------- INDIVIDUAL BIOCHEMISTRY ANALYTES (CALCIUM, URIC ACID, CREATININE) -----------------
+if "Serum Creatinine (Single)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🧪 Serum Creatinine")
+    s_cr = st.text_input("Serum Creatinine Value (mg/dL)", value="", key="s_cr_val")
+    if s_cr:
+        final_report_sections["CREATININE_SINGLE"] = {
+            "Serum Creatinine": (s_cr, "Modified Jaffe's Method", "mg/dL", "0.6 - 1.4", 0.6, 1.4)
+        }
+
+if "Serum Uric Acid (Single)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🧪 Serum Uric Acid")
+    s_ua = st.text_input("Serum Uric Acid Value (mg/dL)", value="", key="s_ua_val")
+    if s_ua:
+        final_report_sections["URIC_ACID_SINGLE"] = {
+            "Serum Uric Acid": (s_ua, "Uricase / POD Method", "mg/dL", "3.5 - 7.2", 3.5, 7.2)
+        }
+
+if "Serum Total Calcium (Single)" in selected_profiles:
+    st.markdown("---")
+    st.subheader("🧪 Serum Total Calcium")
+    s_ca = st.text_input("Serum Total Calcium Value (mg/dL)", value="", key="s_ca_val")
+    if s_ca:
+        final_report_sections["CALCIUM_SINGLE"] = {
+            "Serum Total Calcium": (s_ca, "Arsenazo III Method", "mg/dL", "8.5 - 10.5", 8.5, 10.5)
+        }
+
+# ----------------- IMMUNOHEMATOLOGY & PREGNANCY -----------------
 if "Blood Group & Rh Type" in selected_profiles:
     st.markdown("---")
     st.subheader("🩸 ABO Blood Group & Rh Factor")
     bg_c1, bg_c2 = st.columns(2)
-    with bg_c1:
-        abo = st.selectbox("ABO Blood Group", ["'A'", "'B'", "'AB'", "'O'"], index=1)
-    with bg_c2:
-        rh = st.selectbox("Rh (D) Factor", ["Positive (+ve)", "Negative (-ve)"], index=0)
-
+    with bg_c1: abo = st.selectbox("ABO Blood Group", ["'A'", "'B'", "'AB'", "'O'"], index=1)
+    with bg_c2: rh = st.selectbox("Rh (D) Factor", ["Positive (+ve)", "Negative (-ve)"], index=0)
     final_report_sections["BLOODGROUP"] = {
         "ABO Blood Group": (abo, "Slide / Tube Agglutination", "Typing", "'A', 'B', 'AB', 'O'", None, None),
         "Rh (D) Factor": (rh, "Anti-D Hemagglutination", "Typing", "Positive (+ve)", None, None)
     }
 
-# ----------------- SECTION 9: URINE PREGNANCY TEST (UPT) -----------------
 if "Urine Pregnancy Test (UPT)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🤰 Urine Pregnancy Card Test (UPT)")
-    upt_res = st.selectbox("Urine hCG Pregnancy Test", ["Negative (Not Pregnant)", "Positive (Pregnant)", "Inconclusive / Repeat"], index=0)
+    st.subheader("🤰 Urine Pregnancy Test (UPT)")
+    upt_res = st.selectbox("Urine hCG Card Test", ["Negative (Not Pregnant)", "Positive (Pregnant)", "Inconclusive / Repeat"], index=0)
     final_report_sections["UPT"] = {
         "Urine hCG (Pregnancy Card)": (upt_res, "Immunochromatography (hCG)", "Card", "Negative", None, None)
     }
 
-# ----------------- SECTION 10: URINE ROUTINE & MICROSCOPIC (URINE R/M) -----------------
+# ----------------- URINE ROUTINE & MICROSCOPIC (URINE R/M) -----------------
 if "Urine Routine & Microscopic Examination (Urine R/M)" in selected_profiles:
     st.markdown("---")
     st.subheader("🧪 Urine Routine & Microscopic Examination (Urine R/M)")
@@ -489,29 +571,7 @@ if "Urine Routine & Microscopic Examination (Urine R/M)" in selected_profiles:
         "Bacteria": (u_bac, "Microscopy (Centrifuged)", "--", "Absent", None, None)
     }
 
-# ----------------- SECTION 11: INDIVIDUAL BIOCHEMISTRY (CALCIUM, URIC ACID, CREATININE) -----------------
-if "Routine Biochemistry (Calcium / Uric Acid / Creatinine)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🧪 Individual Serum Biochemical Analytes")
-    bio_c1, bio_c2, bio_c3 = st.columns(3)
-    with bio_c1:
-        s_calc = st.text_input("Serum Total Calcium (mg/dL)", value="")
-    with bio_c2:
-        s_uric = st.text_input("Serum Uric Acid (mg/dL)", value="")
-    with bio_c3:
-        s_creat = st.text_input("Serum Creatinine (mg/dL)", value="")
-
-    bio_dict = {}
-    if s_calc:
-        bio_dict["Serum Total Calcium"] = (s_calc, "Arsenazo III Method", "mg/dL", "8.5 - 10.5", 8.5, 10.5)
-    if s_uric:
-        bio_dict["Serum Uric Acid"] = (s_uric, "Uricase / POD Method", "mg/dL", "3.5 - 7.2", 3.5, 7.2)
-    if s_creat:
-        bio_dict["Serum Creatinine"] = (s_creat, "Modified Jaffe's Method", "mg/dL", "0.6 - 1.4", 0.6, 1.4)
-    if bio_dict:
-        final_report_sections["BIOCHEM_INDIVIDUAL"] = bio_dict
-
-# ----------------- SECTION 12: WIDAL AGGLUTINATION -----------------
+# ----------------- WIDAL, TYPHIDOT, MALARIA, GLUCOSE -----------------
 if "Widal Agglutination Test" in selected_profiles:
     st.markdown("---")
     st.subheader("🌡️ Widal Agglutination Slide / Tube Test")
@@ -527,7 +587,6 @@ if "Widal Agglutination Test" in selected_profiles:
         "Salmonella paratyphi 'BH'": (wbh, "Slide Agglutination", "Titer", "Negative / Non-significant", None, None)
     }
 
-# ----------------- SECTION 13: TYPHIDOT -----------------
 if "Typhidot (IgM / IgG)" in selected_profiles:
     st.markdown("---")
     st.subheader("🧪 Typhidot Rapid Card Test")
@@ -539,7 +598,6 @@ if "Typhidot (IgM / IgG)" in selected_profiles:
         "Typhidot IgG Antibody": (ty_g, "Immunochromatography", "Qualitative", "Non-Reactive", None, None)
     }
 
-# ----------------- SECTION 14: MALARIA -----------------
 if "Malaria Card & Smear (MP)" in selected_profiles:
     st.markdown("---")
     st.subheader("🦟 Malaria Diagnostic Profile")
@@ -553,7 +611,6 @@ if "Malaria Card & Smear (MP)" in selected_profiles:
         "P. falciparum Antigen": (mp_pf, "Immunochromatography", "Card", "Negative", None, None)
     }
 
-# ----------------- SECTION 15: BLOOD GLUCOSE -----------------
 if "Blood Glucose" in selected_profiles:
     st.markdown("---")
     st.subheader("🍬 Blood Glucose Profile")
@@ -605,7 +662,7 @@ KNOWLEDGE_BASE = {
     "DENGUE": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: DENGUE SEROLOGY",
         "significance": "Dengue NS1 Antigen detects non-structural viral protein within 1-5 days of fever onset. Dengue IgM antibodies appear after day 4-5 signifying primary infection, while IgG indicates secondary or past infection.",
-        "elevated": "POSITIVE NS1 / IgM: Indicates acute Dengue viremia. Secondary dengue infection (Positive IgG with/without IgM) carries increased risk of Dengue Hemorrhagic Fever (DHF) and Shock Syndrome (DSS).",
+        "elevated": "POSITIVE NS1 / IgM: Indicates acute Dengue viremia. Secondary dengue infection (Positive IgG) carries increased risk of Dengue Hemorrhagic Fever (DHF) and Shock Syndrome (DSS).",
         "decreased": "NEGATIVE FINDINGS: Negative test during first 24 hours does not rule out Dengue infection; repeat testing after 48 hours is indicated if clinical suspicion persists.",
         "guidance": "RECOMMENDED ACTION: Closely monitor daily Platelet Count and Hematocrit (PCV). Watch for warning signs: persistent abdominal pain, mucosal bleed, fluid accumulation, or severe lethargy.",
         "notes": "NOTE: Cross-reactivity with other flaviviruses may occasionally occur."
@@ -618,13 +675,45 @@ KNOWLEDGE_BASE = {
         "guidance": "RECOMMENDED ACTION: All reactive screening findings require pre-test/post-test clinical counseling, confirmatory supplemental assays, and expert clinical management.",
         "notes": "NOTE: Test results should strictly remain confidential under clinical bioethics standards."
     },
-    "INFLAMMATORY": {
-        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: INFLAMMATORY & RHEUMATOLOGY",
-        "significance": "C-Reactive Protein (CRP) is a sensitive acute-phase reactant synthesized by hepatocytes in response to IL-6. Rheumatoid Factor (RA/RF) detects autoantibodies directed against Fc portion of IgG.",
-        "elevated": "ELEVATED CRP (>6 mg/L): Indicates acute bacterial infection, tissue infarction, or systemic vasculitis. POSITIVE RA (>8 IU/mL): Strongly supports clinical diagnosis of Rheumatoid Arthritis, Sjogren's, or SLE.",
-        "decreased": "LOW / NEGATIVE: Normal values point away from acute invasive bacterial sepsis or active flare of severe systemic inflammatory connective tissue disorders.",
-        "guidance": "RECOMMENDED ACTION: In suspected Rheumatoid Arthritis, evaluate Anti-CCP (cyclic citrullinated peptide) for definitive confirmation. Monitor CRP to assess response to anti-inflammatory therapy.",
-        "notes": "NOTE: RA Factor can be elevated in chronic infections such as Tuberculosis and Subacute Bacterial Endocarditis."
+    "CRP": {
+        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: C-REACTIVE PROTEIN (CRP)",
+        "significance": "CRP is a sensitive acute-phase protein synthesized by hepatocytes under cytokine stimulation (IL-6). It rises sharply within 6 to 8 hours of tissue injury, inflammation, or bacterial infection.",
+        "elevated": "ELEVATED (>6.0 mg/L): Indicates active systemic inflammation, bacterial infection, acute myocardial infarction, or flare of autoimmune diseases. Values >50 mg/dL strongly suggest invasive bacterial infections.",
+        "decreased": "NORMAL (<6.0 mg/L): Suggests absence of active significant bacterial infection or high-grade systemic inflammatory flare.",
+        "guidance": "RECOMMENDED ACTION: Serial CRP measurements are clinically useful to monitor antibiotic response, post-surgical recovery, and remission in inflammatory disorders.",
+        "notes": "NOTE: High-sensitivity CRP (hs-CRP) is used separately for cardiovascular risk stratification."
+    },
+    "RA": {
+        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: RHEUMATOID FACTOR (RA/RF)",
+        "significance": "Rheumatoid Factor detects autoantibodies (predominantly IgM) directed against antigenic determinants on Fc region of human IgG molecules.",
+        "elevated": "POSITIVE (>8.0 IU/mL): Found in 70-80% of patients with established Rheumatoid Arthritis. Also observed in Sjogren's syndrome, SLE, and mixed cryoglobulinemia.",
+        "decreased": "NEGATIVE (<8.0 IU/mL): Does not rule out Rheumatoid Arthritis (up to 20-30% of patients remain seronegative RA, particularly early in disease course).",
+        "guidance": "RECOMMENDED ACTION: In suspected RA with borderline or negative RF, evaluate Anti-CCP (anti-cyclic citrullinated peptide) for definitive diagnostic specificity.",
+        "notes": "NOTE: False-positive RF elevations can occur in chronic hepatitis, malaria, tuberculosis, and leprosy."
+    },
+    "CREATININE": {
+        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: SERUM CREATININE",
+        "significance": "Serum Creatinine is an end-product of muscle creatine phosphate catabolism, filtered freely by glomeruli and minimally secreted by tubules. Key index of glomerular filtration rate (GFR).",
+        "elevated": "ELEVATED (>1.4 mg/dL): Direct indicator of renal functional impairment, acute kidney injury (AKI), chronic kidney disease (CKD), urinary tract obstruction, or severe dehydration.",
+        "decreased": "DECREASED (<0.6 mg/dL): Observed in marked muscle atrophy, advanced cachexia, severe liver failure, or pregnancy (hyperfiltration).",
+        "guidance": "RECOMMENDED ACTION: Calculate eGFR (CKD-EPI formula) and examine urine for proteinuria/hematuria. If sudden elevation, repeat test and perform USG KUB.",
+        "notes": "NOTE: Serum Creatinine levels depend heavily on individual muscle mass and dietary intake."
+    },
+    "URIC_ACID": {
+        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: SERUM URIC ACID",
+        "significance": "Serum Uric Acid is the terminal end-product of endogenous and dietary purine purine nucleoside metabolism in humans, excreted primarily through kidneys.",
+        "elevated": "HYPERURICEMIA (>7.2 mg/dL): Precipitates monosodium urate crystal deposition leading to acute gouty arthritis, tophi, nephrolithiasis (uric acid stones), and urate nephropathy.",
+        "decreased": "HYPOURICEMIA (<3.5 mg/dL): Uncommon, seen in severe Wilson's disease, Fanconi syndrome (proximal tubular defect), or high-dose allopurinol/uricosuric therapy.",
+        "guidance": "RECOMMENDED ACTION: Recommend hydration (2-3 L/day), restrict high-purine foods (red meat, seafood, alcohol), and evaluate renal function. Initiate xanthine oxidase inhibitor if gouty flare.",
+        "notes": "NOTE: Hyperuricemia alone without clinical arthritis does not necessarily require drug therapy."
+    },
+    "CALCIUM": {
+        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: SERUM TOTAL CALCIUM",
+        "significance": "Total Calcium measures ionized, protein-bound (primarily to albumin), and complexed calcium in circulation. Essential for bone mineralization, neuromuscular transmission, and coagulation.",
+        "elevated": "HYPERCALCEMIA (>10.5 mg/dL): Caused by primary hyperparathyroidism, bone metastasis/malignancy, hypervitaminosis D, sarcoidosis, or prolonged immobilization.",
+        "decreased": "HYPOCALCEMIA (<8.5 mg/dL): Manifests as neuromuscular tetany, carpopedal spasms, perioral numbness, caused by hypoparathyroidism, renal failure, or severe vitamin D deficiency.",
+        "guidance": "RECOMMENDED ACTION: Always calculate Corrected Calcium based on Serum Albumin: Corrected Ca = Total Ca + 0.8 x (4.0 - Albumin). Measure Serum PTH and Vitamin D3.",
+        "notes": "NOTE: Critical values (<6.5 or >13.0 mg/dL) require urgent clinical intervention."
     },
     "BLOODGROUP": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: IMMUNOHEMATOLOGY",
@@ -649,14 +738,6 @@ KNOWLEDGE_BASE = {
         "decreased": "NORMAL CITATION: Absence of protein, glucose, ketones, and cellular sediment is typical of healthy renal tubular function.",
         "guidance": "RECOMMENDED ACTION: If significant pyuria or bacteriuria is identified, perform Urine Culture & Antibiotic Sensitivity (Urine C&S) prior to initiating antimicrobial therapy.",
         "notes": "NOTE: Contamination by vaginal secretions or perineal flora can lead to artifactual epithelial cells."
-    },
-    "BIOCHEM_INDIVIDUAL": {
-        "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: CLINICAL BIOCHEMISTRY",
-        "significance": "Quantifies physiological concentration of critical metabolic analytes: Total Calcium (mineral homeostasis), Uric Acid (purine breakdown), and Creatinine (glomerular filtration marker).",
-        "elevated": "ELEVATIONS: Hyperuricemia (>7.2 mg/dL) precipitates acute gouty arthritis and urate nephropathy. Hypercalcemia (>10.5 mg/dL) occurs in primary hyperparathyroidism and malignancy. High Creatinine indicates impaired GFR.",
-        "decreased": "DECREASES: Hypocalcemia (<8.5 mg/dL) causes neuromuscular irritability and tetany, frequently linked to hypovitaminosis D or hypoparathyroidism.",
-        "guidance": "RECOMMENDED ACTION: For abnormal Calcium, measure Serum Albumin, Ionized Calcium, and Serum PTH. In hyperuricemia, prescribe low-purine diet and xanthine oxidase inhibitors if symptomatic.",
-        "notes": "NOTE: Total calcium requires correction for Serum Albumin: Corrected Ca = Total Ca + 0.8 x (4.0 - Albumin)."
     },
     "WIDAL": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: WIDAL AGGLUTINATION PROFILE",
@@ -961,7 +1042,7 @@ class PDFReportManager:
         self.curr_y = box_top - 41
         self.print_knowledge_box("CBC")
 
-    def print_section(self, section_key, title, data_dict, bar_hex, is_first_on_page=False):
+    def print_section(self, kb_key, title, data_dict, bar_hex, is_first_on_page=False):
         active_rows = {k: v for k, v in data_dict.items() if str(v[0]).strip() != ""}
         if not active_rows:
             return
@@ -1003,7 +1084,7 @@ class PDFReportManager:
                 elif high_val is not None and v_num > high_val:
                     is_abnormal = True
                     flag_suffix = " (H) ▲"
-            elif any(x in val_str.lower() for x in ["positive", "reactive", "seen", "1:80", "1:160", "1:320", "+", "turbid", "amber"]):
+            elif any(x in val_str.lower() for x in ["positive", "reactive", "seen", "1:80", "1:160", "1:320", "+", "amber", "turbid"]):
                 if not any(x in val_str.lower() for x in ["non-reactive", "negative", "nil", "clear"]):
                     is_abnormal = True
                     flag_suffix = " *"
@@ -1036,8 +1117,8 @@ class PDFReportManager:
 
         self.curr_y = y - 8
 
-        if self.separate_pages_mode:
-            self.print_knowledge_box(section_key)
+        if self.separate_pages_mode and kb_key:
+            self.print_knowledge_box(kb_key)
 
     def finish(self):
         self.draw_footer()
@@ -1062,62 +1143,93 @@ else:
         doc = PDFReportManager(buf, p_info, separate_pages_mode=separate_pages)
         first_section = True
         
+        # 1. CBC
         if "CBC" in final_report_sections:
             doc.print_cbc_and_gbp_together(final_report_sections["CBC"]["items"], final_report_sections["CBC"]["gbp"])
             first_section = False
             
+        # 2. LFT
         if "LFT" in final_report_sections:
             doc.print_section("LFT", "CLINICAL BIOCHEMISTRY - LIVER FUNCTION TEST (LFT)", final_report_sections["LFT"], "#854d0e", is_first_on_page=first_section)
             first_section = False
             
+        # 3. KFT
         if "KFT" in final_report_sections:
             doc.print_section("KFT", "CLINICAL BIOCHEMISTRY - KIDNEY FUNCTION TEST (KFT)", final_report_sections["KFT"], "#7c2d12", is_first_on_page=first_section)
             first_section = False
             
+        # 4. LIPID
         if "LIPID" in final_report_sections:
             doc.print_section("LIPID", "CLINICAL BIOCHEMISTRY - LIPID PROFILE", final_report_sections["LIPID"], "#be123c", is_first_on_page=first_section)
             first_section = False
 
-        if "DENGUE" in final_report_sections:
-            doc.print_section("DENGUE", "SEROLOGY - DENGUE ANTIGEN & ANTIBODY PROFILE", final_report_sections["DENGUE"], "#b45309", is_first_on_page=first_section)
+        # 5. DENGUE (Combo or Single NS1)
+        if "DENGUE_PROFILE" in final_report_sections:
+            doc.print_section("DENGUE", "SEROLOGY - DENGUE COMPLETE PROFILE (NS1 + IgM + IgG)", final_report_sections["DENGUE_PROFILE"], "#b45309", is_first_on_page=first_section)
+            first_section = False
+        elif "DENGUE_NS1" in final_report_sections:
+            doc.print_section("DENGUE", "SEROLOGY - DENGUE NS1 ANTIGEN RAPID TEST", final_report_sections["DENGUE_NS1"], "#b45309", is_first_on_page=first_section)
             first_section = False
 
-        if "VIRAL" in final_report_sections:
-            doc.print_section("VIRAL", "IMMUNOLOGY & SEROLOGY - VIRAL MARKERS SCREENING", final_report_sections["VIRAL"], "#991b1b", is_first_on_page=first_section)
+        # 6. VIRAL MARKERS (Combo or Individual)
+        if "VIRAL_PROFILE" in final_report_sections:
+            doc.print_section("VIRAL", "IMMUNOLOGY & SEROLOGY - VIRAL MARKERS SCREENING (4-IN-1)", final_report_sections["VIRAL_PROFILE"], "#991b1b", is_first_on_page=first_section)
+            first_section = False
+        if "HIV_SINGLE" in final_report_sections:
+            doc.print_section("VIRAL", "IMMUNOLOGY - HUMAN IMMUNODEFICIENCY VIRUS (HIV 1 & 2)", final_report_sections["HIV_SINGLE"], "#991b1b", is_first_on_page=first_section)
+            first_section = False
+        if "HBSAG_SINGLE" in final_report_sections:
+            doc.print_section("VIRAL", "IMMUNOLOGY - HEPATITIS B SURFACE ANTIGEN (HBsAg)", final_report_sections["HBSAG_SINGLE"], "#991b1b", is_first_on_page=first_section)
+            first_section = False
+        if "HCV_SINGLE" in final_report_sections:
+            doc.print_section("VIRAL", "IMMUNOLOGY - HEPATITIS C VIRUS (HCV) ANTIBODY", final_report_sections["HCV_SINGLE"], "#991b1b", is_first_on_page=first_section)
+            first_section = False
+        if "VDRL_SINGLE" in final_report_sections:
+            doc.print_section("VIRAL", "SEROLOGY - VDRL / RPR TEST FOR SYPHILIS", final_report_sections["VDRL_SINGLE"], "#991b1b", is_first_on_page=first_section)
             first_section = False
 
-        if "INFLAMMATORY" in final_report_sections:
-            doc.print_section("INFLAMMATORY", "SEROLOGY - CRP & RHEUMATOID ARTHRITIS (RF)", final_report_sections["INFLAMMATORY"], "#0369a1", is_first_on_page=first_section)
+        # 7. INFLAMMATORY (Individual CRP & RA)
+        if "CRP_SINGLE" in final_report_sections:
+            doc.print_section("CRP", "CLINICAL BIOCHEMISTRY - C-REACTIVE PROTEIN (CRP)", final_report_sections["CRP_SINGLE"], "#0369a1", is_first_on_page=first_section)
+            first_section = False
+        if "RA_SINGLE" in final_report_sections:
+            doc.print_section("RA", "SEROLOGY & IMMUNOLOGY - RHEUMATOID FACTOR (RA / RF)", final_report_sections["RA_SINGLE"], "#0369a1", is_first_on_page=first_section)
             first_section = False
 
+        # 8. INDIVIDUAL BIOCHEMISTRY (Creatinine, Uric Acid, Calcium)
+        if "CREATININE_SINGLE" in final_report_sections:
+            doc.print_section("CREATININE", "CLINICAL BIOCHEMISTRY - SERUM CREATININE", final_report_sections["CREATININE_SINGLE"], "#047857", is_first_on_page=first_section)
+            first_section = False
+        if "URIC_ACID_SINGLE" in final_report_sections:
+            doc.print_section("URIC_ACID", "CLINICAL BIOCHEMISTRY - SERUM URIC ACID", final_report_sections["URIC_ACID_SINGLE"], "#047857", is_first_on_page=first_section)
+            first_section = False
+        if "CALCIUM_SINGLE" in final_report_sections:
+            doc.print_section("CALCIUM", "CLINICAL BIOCHEMISTRY - SERUM TOTAL CALCIUM", final_report_sections["CALCIUM_SINGLE"], "#047857", is_first_on_page=first_section)
+            first_section = False
+
+        # 9. BLOOD GROUP & UPT
         if "BLOODGROUP" in final_report_sections:
             doc.print_section("BLOODGROUP", "IMMUNOHEMATOLOGY - BLOOD GROUP & RH FACTOR", final_report_sections["BLOODGROUP"], "#9f1239", is_first_on_page=first_section)
             first_section = False
-
         if "UPT" in final_report_sections:
             doc.print_section("UPT", "RAPID SEROLOGY - URINE PREGNANCY TEST (UPT)", final_report_sections["UPT"], "#a21caf", is_first_on_page=first_section)
             first_section = False
 
+        # 10. URINE R/M
         if "URINE_RM" in final_report_sections:
             doc.print_section("URINE_RM", "CLINICAL PATHOLOGY - URINE ROUTINE & MICROSCOPY", final_report_sections["URINE_RM"], "#ca8a04", is_first_on_page=first_section)
             first_section = False
 
-        if "BIOCHEM_INDIVIDUAL" in final_report_sections:
-            doc.print_section("BIOCHEM_INDIVIDUAL", "CLINICAL BIOCHEMISTRY - SERUM METABOLIC ANALYTES", final_report_sections["BIOCHEM_INDIVIDUAL"], "#047857", is_first_on_page=first_section)
-            first_section = False
-
+        # 11. WIDAL, TYPHIDOT, MALARIA, GLUCOSE
         if "WIDAL" in final_report_sections:
             doc.print_section("WIDAL", "SEROLOGY - WIDAL AGGLUTINATION PROFILE", final_report_sections["WIDAL"], "#4338ca", is_first_on_page=first_section)
             first_section = False
-
         if "TYPHIDOT" in final_report_sections:
             doc.print_section("TYPHIDOT", "RAPID SEROLOGY - TYPHIDOT (IgM / IgG) PROFILE", final_report_sections["TYPHIDOT"], "#6b21a8", is_first_on_page=first_section)
             first_section = False
-
         if "MALARIA" in final_report_sections:
             doc.print_section("MALARIA", "PARASITOLOGY - MALARIA RAPID & MICROSCOPY PROFILE", final_report_sections["MALARIA"], "#0e7490", is_first_on_page=first_section)
             first_section = False
-
         if "GLUCOSE" in final_report_sections:
             doc.print_section("GLUCOSE", "BIOCHEMISTRY - BLOOD GLUCOSE MONITORING", final_report_sections["GLUCOSE"], "#1e3a8a", is_first_on_page=first_section)
             first_section = False
