@@ -15,7 +15,49 @@ import os
 st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wide")
 st.title("The Sen Labs - Clinical Diagnostic System")
 
-api_key = st.sidebar.text_input("Enter Gemini API Key (For OCR)", type="password")
+# ==============================================================================
+# 🔑 PERMANENT API KEY MANAGEMENT
+# ==============================================================================
+KEY_FILE = "api_key.txt"
+
+def load_saved_key():
+    if os.path.exists(KEY_FILE):
+        try:
+            with open(KEY_FILE, "r") as f:
+                return f.read().strip()
+        except:
+            return ""
+    return ""
+
+def save_key_to_disk(k):
+    try:
+        with open(KEY_FILE, "w") as f:
+            f.write(k.strip())
+    except:
+        pass
+
+if "saved_api_key" not in st.session_state:
+    st.session_state.saved_api_key = load_saved_key()
+
+with st.sidebar:
+    st.markdown("### ⚙️ System Settings")
+    input_key = st.text_input("Gemini API Key (Auto-Saved)", value=st.session_state.saved_api_key, type="password")
+    
+    if input_key != st.session_state.saved_api_key:
+        st.session_state.saved_api_key = input_key
+        save_key_to_disk(input_key)
+        st.success("API Key successfully saved permanently!")
+
+    if st.session_state.saved_api_key:
+        st.caption("✅ API Key active & locked to this device.")
+    else:
+        st.warning("⚠️ Enter API key once for slip OCR.")
+
+api_key = st.session_state.saved_api_key
+
+# Directory to permanently archive generated PDFs
+REPORT_DIR = "generated_reports"
+os.makedirs(REPORT_DIR, exist_ok=True)
 
 # 1. Patient Details
 st.subheader("1. Patient & Sample Information")
@@ -77,7 +119,7 @@ def compress_image_for_fast_ai(img_file):
 
 final_report_sections = {}
 
-# ----------------- SECTION 1: CBC + GBP (WITH AUTO ABSOLUTE COUNTS) -----------------
+# ----------------- SECTION 1: CBC + GBP -----------------
 if "Complete Blood Count (CBC + GBP)" in selected_profiles:
     st.markdown("---")
     st.subheader("🩸 Complete Blood Count (CBC) with Auto Absolute Calculations")
@@ -447,11 +489,9 @@ class PDFReportManager:
         self.draw_header()
 
     def draw_header(self):
-        # 1. Top Royal Navy Blue Banner
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
         self.c.rect(0, self.height - 62, self.width, 62, fill=True, stroke=False)
         
-        # 2. SEAMLESS VECTOR LOGO (Auto-removes black background & recolors to white)
         possible_paths = [
             "logo.png",
             "logo.png.png",
@@ -475,7 +515,6 @@ class PDFReportManager:
                 
                 new_data = []
                 for item in datas:
-                    # Agar pixel black ya dark hai to transparent karo, warna pure white emblem bana do
                     if item[0] < 50 and item[1] < 50 and item[2] < 50:
                         new_data.append((255, 255, 255, 0))
                     else:
@@ -493,7 +532,6 @@ class PDFReportManager:
             except Exception:
                 text_x_pos = 32
 
-        # 3. Lab Title & Subtitle
         self.c.setFillColor(colors.white)
         self.c.setFont("Helvetica-Bold", 17)
         self.c.drawString(text_x_pos, self.height - 28, "THE SEN LABS")
@@ -501,7 +539,6 @@ class PDFReportManager:
         self.c.drawString(text_x_pos, self.height - 44, "ADVANCED PATHOLOGY & CLINICAL BIOCHEMISTRY | AUTOMATED DIAGNOSTICS")
         self.c.drawRightString(self.width - 32, self.height - 34, f"Helpdesk: +91 {self.p['contact']}")
         
-        # 4. Patient Info Box
         self.c.setFillColor(colors.HexColor("#f8fafc"))
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
         self.c.roundRect(32, self.height - 122, self.width - 64, 56, 3, fill=True, stroke=True)
@@ -681,7 +718,6 @@ class PDFReportManager:
             self.c.line(32, y - 1.5, self.width - 32, y - 1.5)
             y -= 9.4
 
-        # GBP Section on SAME PAGE
         gbp_top = y - 3
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
         self.c.rect(32, gbp_top, self.width - 64, 10, fill=True, stroke=False)
@@ -788,7 +824,7 @@ class PDFReportManager:
         self.draw_footer()
         self.c.save()
 
-# ----------------- REPORT ACTION -----------------
+# ----------------- REPORT GENERATION ACTION -----------------
 st.markdown("---")
 if not selected_profiles:
     st.info("👆 Kripya Section 2 me se kam se kam ek test profile select karein.")
@@ -840,11 +876,56 @@ else:
             first_section = False
             
         doc.finish()
-        buf.seek(0)
-        
+        pdf_bytes = buf.getvalue()
+
+        # Archive copy directly to persistent folder
+        filename = f"{sample_id}_{p_name or 'Patient'}.pdf".replace(" ", "_")
+        filepath = os.path.join(REPORT_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(pdf_bytes)
+            
+        st.success(f"Report '{filename}' generated and archived successfully!")
+
         st.download_button(
             label="📥 Download Clinical Diagnostic Report (PDF)",
-            data=buf,
-            file_name=f"{p_name or 'Patient'}_Pathology_Report.pdf",
+            data=pdf_bytes,
+            file_name=filename,
             mime="application/pdf"
         )
+
+# ==============================================================================
+# 📁 SAVED & ARCHIVED REPORTS VIEWER
+# ==============================================================================
+st.markdown("---")
+with st.expander("📁 Generated & Saved Reports History (Purani Reports Yahan Dekhein)", expanded=False):
+    saved_files = sorted(
+        [f for f in os.listdir(REPORT_DIR) if f.endswith(".pdf")],
+        key=lambda x: os.path.getmtime(os.path.join(REPORT_DIR, x)),
+        reverse=True
+    )
+    
+    if not saved_files:
+        st.info("Abhi tak koi report save nahi hui hai.")
+    else:
+        st.markdown(f"**Total Reports Found:** `{len(saved_files)}`")
+        for report_name in saved_files:
+            r_path = os.path.join(REPORT_DIR, report_name)
+            file_time = datetime.fromtimestamp(os.path.getmtime(r_path)).strftime("%d-%b-%Y %I:%M %p")
+            
+            c_info, c_down, c_del = st.columns([3, 1, 1])
+            with c_info:
+                st.markdown(f"📄 **{report_name}**  \n*Created: {file_time}*")
+            with c_down:
+                with open(r_path, "rb") as rf:
+                    st.download_button(
+                        label="⬇️ Download",
+                        data=rf.read(),
+                        file_name=report_name,
+                        mime="application/pdf",
+                        key=f"dl_{report_name}"
+                    )
+            with c_del:
+                if st.button("🗑️ Delete", key=f"del_{report_name}"):
+                    os.remove(r_path)
+                    st.rerun()
+            st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
