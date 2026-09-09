@@ -16,7 +16,23 @@ st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wid
 st.title("The Sen Labs - Clinical Diagnostic System")
 
 # ==============================================================================
-# 🔑 PERMANENT API KEY MANAGEMENT
+# 📷 1. DEFAULT BACK CAMERA SETUP (MOBILE REAR CAMERA PREFERENCE)
+# ==============================================================================
+st.markdown(
+    """
+    <script>
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } }
+        }).catch(function(err) { console.log("Camera facingMode error: ", err); });
+    }
+    </script>
+    """,
+    unsafe_allow_html=True
+)
+
+# ==============================================================================
+# 🔑 2. PERMANENT API KEY MANAGEMENT
 # ==============================================================================
 KEY_FILE = "api_key.txt"
 
@@ -49,7 +65,7 @@ with st.sidebar:
         st.success("API Key successfully saved permanently!")
 
     if st.session_state.saved_api_key:
-        st.caption("✅ API Key active & locked to this device.")
+        st.caption("✅ API Key active & locked.")
     else:
         st.warning("⚠️ Enter API key once for slip OCR.")
 
@@ -68,46 +84,33 @@ with c2:
     p_sex = st.selectbox("Sex", ["Male (M)", "Female (F)", "Other"])
     p_doctor = st.text_input("Referred By (Doctor)", value="Self")
 with c3:
-    p_contact = st.text_input("Lab Contact / Helpline", value="9076816740")
+    p_contact = st.text_input("Lab Helpline", value="9076816740")
     sample_id = st.text_input("Sample ID / Lab No.", value=f"TSL-{datetime.now().strftime('%y%m%d%H%M')}")
 
-# 2. Multi-Test Profile Selector (INDIVIDUAL + COMBO PROFILES)
+# 2. Multi-Test Profile Selector
 st.subheader("2. Select Test Profiles for Patient")
 selected_profiles = st.multiselect(
     "Select investigations prescribed for this patient:",
     [
-        # Routine Profiles
         "Complete Blood Count (CBC + GBP)",
         "Liver Function Test (LFT)",
         "Kidney Function Test (KFT / RFT)",
         "Lipid Profile",
         "Urine Routine & Microscopic Examination (Urine R/M)",
-        
-        # Dengue Options (Individual & Combo)
         "Dengue NS1 Antigen (Single)",
         "Dengue Profile Complete (NS1 + IgM + IgG)",
-
-        # Viral Markers (Individual & Combo)
         "Viral Markers Complete (HIV + HBsAg + HCV + VDRL)",
         "HIV 1 & 2 Antibody (Single)",
         "HBsAg Hepatitis B (Single)",
         "HCV Antibody Hepatitis C (Single)",
         "VDRL / RPR Syphilis (Single)",
-
-        # Rheumatology & Immunology (Individual)
         "C-Reactive Protein (CRP)",
         "Rheumatoid Factor (RA / RF)",
-
-        # Single Biochemical Analytes (Individual)
         "Serum Creatinine (Single)",
         "Serum Uric Acid (Single)",
         "Serum Total Calcium (Single)",
-
-        # Immunohematology & Pregnancy
         "Blood Group & Rh Type",
         "Urine Pregnancy Test (UPT)",
-
-        # Infectious Disease Serology
         "Widal Agglutination Test",
         "Typhidot (IgM / IgG)",
         "Malaria Card & Smear (MP)",
@@ -146,13 +149,13 @@ def compress_image_for_fast_ai(img_file):
 
 final_report_sections = {}
 
-# ----------------- CBC + GBP -----------------
+# ----------------- SECTION 1: CBC + GBP -----------------
 if "Complete Blood Count (CBC + GBP)" in selected_profiles:
     st.markdown("---")
     st.subheader("🩸 Complete Blood Count (CBC) with Auto Absolute Calculations")
     
-    cbc_source = st.radio("Choose Photo Source for CBC Analyzer:", ("📁 Upload Image / Slip", "📸 Live Camera"), horizontal=True)
-    cbc_img = st.file_uploader("Upload machine screen or slip", type=["jpg", "jpeg", "png"], key="cbc_file") if cbc_source == "📁 Upload Image / Slip" else st.camera_input("Capture machine display", key="cbc_live")
+    cbc_source = st.radio("Choose Photo Source for CBC Analyzer:", ("📸 Live Camera (Back Camera)", "📁 Upload Image / Slip"), horizontal=True)
+    cbc_img = st.camera_input("Capture machine display with Rear Camera", key="cbc_live") if cbc_source == "📸 Live Camera (Back Camera)" else st.file_uploader("Upload machine slip", type=["jpg", "jpeg", "png"], key="cbc_file")
     
     if "cbc_raw_data" not in st.session_state:
         st.session_state.cbc_raw_data = {}
@@ -256,6 +259,7 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
     final_report_sections["CBC"] = {
         "items": {
             "Hemoglobin (Hb)": (hgb, "SLS Method", "g/dL", "13.0 - 17.0", 13.0, 17.0),
+            "Total Leukocyte Count (TLC)": (wbc, "Electrical Impedance", "10^3/uL", "4.0 - 10.0", 4.0, 10.0),
             "Total RBC Count": (rbc, "Electrical Impedance", "10^6/uL", "4.50 - 5.50", 4.50, 5.50),
             "Packed Cell Volume (PCV)": (hct, "Calculated", "%", "40.0 - 50.0", 40.0, 50.0),
             "Mean Corpuscular Volume (MCV)": (mcv, "Calculated", "fL", "80.0 - 100.0", 80.0, 100.0),
@@ -263,7 +267,6 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
             "Mean Corpuscular Hb Conc (MCHC)": (mchc, "Calculated", "g/dL", "31.5 - 35.5", 31.5, 35.5),
             "RDW - SD (RDWa)": (rdwa, "Volume Histogram", "fL", "39.0 - 46.0", 39.0, 46.0),
             "RDW - CV": (rdw_cv, "Calculated", "%", "11.5 - 14.5", 11.5, 14.5),
-            "Total Leukocyte Count (TLC)": (wbc, "Electrical Impedance", "10^3/uL", "4.0 - 10.0", 4.0, 10.0),
             "Granulocytes / Neutrophils (%)": (gran_p, "Impedance / Flow", "%", "40.0 - 70.0", 40.0, 70.0),
             "Absolute Neutrophil Count (#)": (gran_abs, "Calculated (TLC x %)", "10^3/uL", "2.00 - 7.00", 2.00, 7.00),
             "Lymphocytes (%)": (lym_p, "Impedance / Flow", "%", "20.0 - 40.0", 20.0, 40.0),
@@ -279,7 +282,7 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         "gbp": {"rbc": gbp_rbc, "wbc": gbp_wbc, "plt": gbp_plt, "imp": gbp_imp}
     }
 
-# ----------------- LFT -----------------
+# ----------------- SECTION 2: LFT -----------------
 if "Liver Function Test (LFT)" in selected_profiles:
     st.markdown("---")
     st.subheader("🧪 Liver Function Test (LFT) - Self Calculating")
@@ -319,7 +322,7 @@ if "Liver Function Test (LFT)" in selected_profiles:
         "A : G Ratio": (ag_ratio, "Calculated", "Ratio", "1.2 - 2.2", 1.2, 2.2)
     }
 
-# ----------------- KFT -----------------
+# ----------------- SECTION 3: KFT -----------------
 if "Kidney Function Test (KFT / RFT)" in selected_profiles:
     st.markdown("---")
     st.subheader("🫘 Kidney Function Test (KFT / RFT) - Self Calculating")
@@ -351,7 +354,7 @@ if "Kidney Function Test (KFT / RFT)" in selected_profiles:
         "Serum Chloride (Cl-)": (chlor, "ISE Direct", "mEq/L", "96 - 106", 96.0, 106.0)
     }
 
-# ----------------- LIPID PROFILE -----------------
+# ----------------- SECTION 4: LIPID PROFILE -----------------
 if "Lipid Profile" in selected_profiles:
     st.markdown("---")
     st.subheader("❤️ Lipid Profile - Self Calculating (Friedewald Equation)")
@@ -379,10 +382,10 @@ if "Lipid Profile" in selected_profiles:
         "Total Chol / HDL Ratio": (tc_hdl, "Calculated", "Ratio", "3.0 - 5.0", 3.0, 5.0)
     }
 
-# ----------------- DENGUE OPTIONS (INDIVIDUAL & COMPLETE) -----------------
+# ----------------- DENGUE (INDIVIDUAL & COMPLETE) -----------------
 if "Dengue NS1 Antigen (Single)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🦟 Dengue NS1 Antigen Test (Early Fever)")
+    st.subheader("🦟 Dengue NS1 Antigen Test")
     dns1_s = st.selectbox("Dengue NS1 Antigen", ["Negative", "Positive"], key="d_ns1_single")
     final_report_sections["DENGUE_NS1"] = {
         "Dengue NS1 Antigen": (dns1_s, "Immunochromatography", "Qualitative", "Negative", None, None)
@@ -390,7 +393,7 @@ if "Dengue NS1 Antigen (Single)" in selected_profiles:
 
 if "Dengue Profile Complete (NS1 + IgM + IgG)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🦟 Dengue Complete Profile (NS1 Antigen + IgM + IgG Antibodies)")
+    st.subheader("🦟 Dengue Complete Profile")
     d1, d2, d3 = st.columns(3)
     with d1: dns1_c = st.selectbox("Dengue NS1 Antigen", ["Negative", "Positive"], key="d_ns1_c")
     with d2: digm_c = st.selectbox("Dengue IgM Antibody", ["Negative", "Positive"], key="d_igm_c")
@@ -401,7 +404,7 @@ if "Dengue Profile Complete (NS1 + IgM + IgG)" in selected_profiles:
         "Dengue IgG Antibody": (digg_c, "Immunochromatography", "Qualitative", "Negative", None, None)
     }
 
-# ----------------- VIRAL MARKER (INDIVIDUAL & COMPLETE 4-IN-1) -----------------
+# ----------------- VIRAL MARKERS (INDIVIDUAL & COMPLETE) -----------------
 if "Viral Markers Complete (HIV + HBsAg + HCV + VDRL)" in selected_profiles:
     st.markdown("---")
     st.subheader("🛡️ Complete Viral Markers Battery (4-in-1)")
@@ -420,7 +423,7 @@ if "Viral Markers Complete (HIV + HBsAg + HCV + VDRL)" in selected_profiles:
 if "HIV 1 & 2 Antibody (Single)" in selected_profiles:
     st.markdown("---")
     st.subheader("🛡️ HIV 1 & 2 Antibody Screening")
-    s_hiv = st.selectbox("HIV 1 & 2 Antibody Result", ["Non-Reactive", "Reactive"], key="s_hiv_val")
+    s_hiv = st.selectbox("HIV 1 & 2 Antibody", ["Non-Reactive", "Reactive"], key="s_hiv_val")
     final_report_sections["HIV_SINGLE"] = {
         "HIV 1 & 2 Antibodies": (s_hiv, "4th Gen Immunochromatography", "Screening", "Non-Reactive", None, None)
     }
@@ -444,15 +447,15 @@ if "HCV Antibody Hepatitis C (Single)" in selected_profiles:
 if "VDRL / RPR Syphilis (Single)" in selected_profiles:
     st.markdown("---")
     st.subheader("🛡️ VDRL / RPR Serological Test for Syphilis")
-    s_vdrl = st.selectbox("VDRL / RPR Result", ["Non-Reactive", "Reactive (1:8)", "Reactive (1:16)", "Reactive (1:32)"], key="s_vdrl_val")
+    s_vdrl = st.selectbox("VDRL / RPR Result", ["Non-Reactive", "Reactive (1:8)", "Reactive (1:16)"], key="s_vdrl_val")
     final_report_sections["VDRL_SINGLE"] = {
         "VDRL / RPR (Syphilis Screen)": (s_vdrl, "Flocculation / Card", "Qualitative", "Non-Reactive", None, None)
     }
 
-# ----------------- INFLAMMATORY (CRP & RA SEPARATE) -----------------
+# ----------------- INFLAMMATORY & RHEUMATOLOGY (CRP & RA) -----------------
 if "C-Reactive Protein (CRP)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🔬 C-Reactive Protein (CRP) - Acute Phase Reactant")
+    st.subheader("🔬 C-Reactive Protein (CRP)")
     c_m1, c_m2 = st.columns(2)
     with c_m1: crp_mode = st.radio("CRP Value Mode:", ["Semi-Quantitative (mg/L)", "Qualitative Latex"], horizontal=True, key="crp_mode")
     with c_m2:
@@ -466,7 +469,7 @@ if "C-Reactive Protein (CRP)" in selected_profiles:
 
 if "Rheumatoid Factor (RA / RF)" in selected_profiles:
     st.markdown("---")
-    st.subheader("🔬 Rheumatoid Factor (RA / RF) Serology")
+    st.subheader("🔬 Rheumatoid Factor (RA / RF)")
     ra_m1, ra_m2 = st.columns(2)
     with ra_m1: ra_mode = st.radio("RA Factor Value Mode:", ["Semi-Quantitative (IU/mL)", "Qualitative Latex"], horizontal=True, key="ra_mode")
     with ra_m2:
@@ -478,7 +481,7 @@ if "Rheumatoid Factor (RA / RF)" in selected_profiles:
         "Rheumatoid Factor (RA / RF)": (ra_input, "Latex Agglutination / Turbidimetry", "IU/mL", "< 8.0 (Negative)", 0.0, 8.0)
     }
 
-# ----------------- INDIVIDUAL BIOCHEMISTRY ANALYTES (CALCIUM, URIC ACID, CREATININE) -----------------
+# ----------------- INDIVIDUAL BIOCHEMISTRY ANALYTES -----------------
 if "Serum Creatinine (Single)" in selected_profiles:
     st.markdown("---")
     st.subheader("🧪 Serum Creatinine")
@@ -545,7 +548,7 @@ if "Urine Routine & Microscopic Examination (Urine R/M)" in selected_profiles:
         u_bld = st.selectbox("Occult Blood", ["Negative", "Positive"], index=0)
         u_uro = st.selectbox("Urobilinogen", ["Normal", "Increased"], index=0)
     with ur_c3:
-        st.markdown("**Microscopic Examination (Centrifuged Deposit)**")
+        st.markdown("**Microscopic Examination**")
         u_pus = st.text_input("Pus Cells (WBCs)", value="2 - 4 / HPF")
         u_epi = st.text_input("Epithelial Cells", value="1 - 3 / HPF")
         u_rbc = st.text_input("Red Blood Cells (RBCs)", value="Nil / HPF")
@@ -625,11 +628,11 @@ if "Blood Glucose" in selected_profiles:
     if glu_dict:
         final_report_sections["GLUCOSE"] = glu_dict
 
-# ----------------- CLINICAL KNOWLEDGE BASE -----------------
+# ----------------- KNOWLEDGE BASE -----------------
 KNOWLEDGE_BASE = {
     "CBC": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: HEMATOLOGY PROFILE",
-        "significance": "Complete Blood Count (CBC) evaluates erythrocytes, leukocytes, and thrombocytes. Absolute counts provide the quantitative load of specific white cells in peripheral blood, offering superior clinical diagnostic accuracy over percentage values.",
+        "significance": "Complete Blood Count (CBC) evaluates erythrocytes, leukocytes, and thrombocytes. Absolute counts provide exact quantitative load of specific white cells in peripheral blood, offering superior clinical diagnostic accuracy over percentage values.",
         "elevated": "ELEVATED (HIGH): Absolute Neutrophilia (ANC > 7.0x10^3/uL) indicates acute bacterial infections, tissue necrosis, or physiological stress. Absolute Lymphocytosis (ALC > 3.0x10^3/uL) suggests viral infections (EBV, CMV), pertussis, or CLL.",
         "decreased": "DECREASED (LOW): Absolute Neutropenia (ANC < 2.0x10^3/uL; severe < 0.5x10^3/uL) significantly predisposes to opportunistic infections, often seen after chemotherapy or sepsis. Absolute Lymphopenia (< 1.0x10^3/uL) is noted in viral sepsis or steroid therapy.",
         "guidance": "RECOMMENDED ACTION: In severe neutropenia (ANC < 1.0x10^3/uL), implement neutropenic precautions. In thrombocytopenia (<50x10^3/uL), screen for Dengue NS1/IgM and avoid intramuscular injections.",
@@ -701,7 +704,7 @@ KNOWLEDGE_BASE = {
     },
     "URIC_ACID": {
         "title": "CLINICAL SIGNIFICANCE & INTERPRETATION: SERUM URIC ACID",
-        "significance": "Serum Uric Acid is the terminal end-product of endogenous and dietary purine purine nucleoside metabolism in humans, excreted primarily through kidneys.",
+        "significance": "Serum Uric Acid is the terminal end-product of endogenous and dietary purine nucleoside metabolism in humans, excreted primarily through kidneys.",
         "elevated": "HYPERURICEMIA (>7.2 mg/dL): Precipitates monosodium urate crystal deposition leading to acute gouty arthritis, tophi, nephrolithiasis (uric acid stones), and urate nephropathy.",
         "decreased": "HYPOURICEMIA (<3.5 mg/dL): Uncommon, seen in severe Wilson's disease, Fanconi syndrome (proximal tubular defect), or high-dose allopurinol/uricosuric therapy.",
         "guidance": "RECOMMENDED ACTION: Recommend hydration (2-3 L/day), restrict high-purine foods (red meat, seafood, alcohol), and evaluate renal function. Initiate xanthine oxidase inhibitor if gouty flare.",
@@ -904,12 +907,12 @@ class PDFReportManager:
                 line = test_line
             else:
                 self.c.drawString(42 + (p_w if first_line else 0), y, line)
-                y -= 8.0
+                y -= 8.2
                 line = word
                 first_line = False
         if line:
             self.c.drawString(42 + (p_w if first_line else 0), y, line)
-            y -= 8.0
+            y -= 8.2
             
         return y
 
@@ -935,19 +938,19 @@ class PDFReportManager:
 
         y = box_top - 18
         y = self.print_wrapped_text("Clinical Significance: ", kb["significance"], y)
-        y -= 1.0
+        y -= 1.5
         
         if y > 110:
             y = self.print_wrapped_text("High Findings (Elevated): ", kb["elevated"], y)
-            y -= 1.0
+            y -= 1.5
             
         if y > 95:
             y = self.print_wrapped_text("Low Findings (Decreased): ", kb["decreased"], y)
-            y -= 1.0
+            y -= 1.5
             
         if y > 80:
             y = self.print_wrapped_text("Recommended Action: ", kb["guidance"], y)
-            y -= 1.0
+            y -= 1.5
             
         if y > 70:
             self.c.setFont("Helvetica-Oblique", 5.6)
@@ -956,7 +959,7 @@ class PDFReportManager:
 
         self.curr_y = 62
 
-    # CBC + GBP TOGETHER ON PAGE 1
+    # CBC + GBP TOGETHER ON PAGE 1 (CLEAR SPACING & PADDING BETWEEN ROWS)
     def print_cbc_and_gbp_together(self, cbc_items, gbp_data):
         active_rows = {k: v for k, v in cbc_items.items() if str(v[0]).strip() != ""}
         
@@ -967,16 +970,18 @@ class PDFReportManager:
         self.c.drawString(38, self.curr_y - 9, "COMPLETE BLOOD COUNT (AUTOMATED HEMATOLOGY WITH ABSOLUTE INDICES)")
 
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
-        self.c.rect(32, self.curr_y - 23, self.width - 64, 11, fill=True, stroke=False)
+        self.c.rect(32, self.curr_y - 25, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
-        self.c.setFont("Helvetica-Bold", 6.4)
-        self.c.drawString(38, self.curr_y - 20, "TEST / INVESTIGATION")
-        self.c.drawString(195, self.curr_y - 20, "TEST METHOD")
-        self.c.drawString(315, self.curr_y - 20, "RESULT")
-        self.c.drawString(410, self.curr_y - 20, "UNIT")
-        self.c.drawString(455, self.curr_y - 20, "REFERENCE INTERVAL")
+        self.c.setFont("Helvetica-Bold", 6.5)
+        self.c.drawString(38, self.curr_y - 22, "TEST / INVESTIGATION")
+        self.c.drawString(195, self.curr_y - 22, "TEST METHOD")
+        self.c.drawString(315, self.curr_y - 22, "RESULT")
+        self.c.drawString(410, self.curr_y - 22, "UNIT")
+        self.c.drawString(455, self.curr_y - 22, "REFERENCE INTERVAL")
 
-        y = self.curr_y - 32
+        y = self.curr_y - 37
+        # Comfortable row spacing (12.2 pt) so parameters never touch
+        row_pitch = 12.2
         for param, (val, method, unit, ref, low_val, high_val) in active_rows.items():
             val_str = str(val).strip()
             v_num = safe_float(val_str)
@@ -991,66 +996,71 @@ class PDFReportManager:
                     is_abnormal = True
                     flag_suffix = " (H) ▲"
 
-            self.c.setFont("Helvetica", 6.2)
+            self.c.setFont("Helvetica", 6.6)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(38, y, str(param)[:34])
             
-            self.c.setFont("Helvetica-Oblique", 5.6)
+            self.c.setFont("Helvetica-Oblique", 6.0)
             self.c.setFillColor(colors.HexColor("#64748b"))
             self.c.drawString(195, y, str(method)[:24])
 
             if is_abnormal:
-                self.c.setFont("Helvetica-Bold", 6.4)
+                self.c.setFont("Helvetica-Bold", 6.8)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
                 self.c.drawString(315, y, f"{val_str[:20]}{flag_suffix}")
             else:
-                self.c.setFont("Helvetica", 6.2)
+                self.c.setFont("Helvetica", 6.6)
                 self.c.setFillColor(colors.HexColor("#0f172a"))
                 self.c.drawString(315, y, str(val_str)[:20])
 
-            self.c.setFont("Helvetica", 6.2)
+            self.c.setFont("Helvetica", 6.6)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(410, y, str(unit)[:8])
             self.c.drawString(455, y, str(ref)[:25])
 
+            # Clear divider line with 3.5 pt spacing underneath each parameter
             self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
-            self.c.line(32, y - 1.5, self.width - 32, y - 1.5)
-            y -= 9.4
+            self.c.line(32, y - 3.5, self.width - 32, y - 3.5)
+            y -= row_pitch
 
-        gbp_top = y - 3
+        # GBP Section on SAME PAGE
+        gbp_top = y - 4
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
-        self.c.rect(32, gbp_top, self.width - 64, 10, fill=True, stroke=False)
+        self.c.rect(32, gbp_top, self.width - 64, 11, fill=True, stroke=False)
         self.c.setFillColor(colors.white)
-        self.c.setFont("Helvetica-Bold", 6.5)
-        self.c.drawString(38, gbp_top + 2.5, "GENERAL BLOOD PICTURE (PERIPHERAL BLOOD SMEAR EXAMINATION)")
+        self.c.setFont("Helvetica-Bold", 6.6)
+        self.c.drawString(38, gbp_top + 3.0, "GENERAL BLOOD PICTURE (PERIPHERAL BLOOD SMEAR EXAMINATION)")
 
         box_top = gbp_top - 1
         self.c.setFillColor(colors.HexColor("#f8fafc"))
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
-        self.c.rect(32, box_top - 36, self.width - 64, 36, fill=True, stroke=True)
+        self.c.rect(32, box_top - 38, self.width - 64, 38, fill=True, stroke=True)
 
-        gy = box_top - 7.5
+        gy = box_top - 8.5
         for label, txt in [("RBC Morphology", gbp_data["rbc"]), ("WBC Morphology", gbp_data["wbc"]), ("Platelets on Smear", gbp_data["plt"]), ("Smear Impression", gbp_data["imp"])]:
-            self.c.setFont("Helvetica-Bold", 6.0)
+            self.c.setFont("Helvetica-Bold", 6.1)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(38, gy, f"{label}:")
-            self.c.setFont("Helvetica", 6.0)
+            self.c.setFont("Helvetica", 6.1)
             self.c.setFillColor(colors.HexColor("#334155"))
             self.c.drawString(125, gy, txt[:105])
-            gy -= 8.2
+            gy -= 8.5
             
-        self.curr_y = box_top - 41
+        self.curr_y = box_top - 42
         self.print_knowledge_box("CBC")
 
+    # GENERAL SECTION RENDERER WITH GENEROUS 16.5 PT VERTICAL SPACING
     def print_section(self, kb_key, title, data_dict, bar_hex, is_first_on_page=False):
         active_rows = {k: v for k, v in data_dict.items() if str(v[0]).strip() != ""}
         if not active_rows:
             return
 
+        row_pitch = 16.5  # Generous vertical space between each parameter
+
         if self.separate_pages_mode and not is_first_on_page:
             self.new_page()
         else:
-            needed = 34 + (len(active_rows) * 11)
+            needed = 40 + (len(active_rows) * row_pitch)
             if self.curr_y - needed < 65:
                 self.new_page()
 
@@ -1061,16 +1071,16 @@ class PDFReportManager:
         self.c.drawString(38, self.curr_y - 9, title)
 
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
-        self.c.rect(32, self.curr_y - 25, self.width - 64, 12, fill=True, stroke=False)
+        self.c.rect(32, self.curr_y - 26, self.width - 64, 13, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
-        self.c.setFont("Helvetica-Bold", 6.5)
-        self.c.drawString(38, self.curr_y - 22, "TEST / INVESTIGATION")
-        self.c.drawString(195, self.curr_y - 22, "TEST METHOD")
-        self.c.drawString(315, self.curr_y - 22, "RESULT")
-        self.c.drawString(410, self.curr_y - 22, "UNIT")
-        self.c.drawString(455, self.curr_y - 22, "REFERENCE INTERVAL")
+        self.c.setFont("Helvetica-Bold", 6.6)
+        self.c.drawString(38, self.curr_y - 23, "TEST / INVESTIGATION")
+        self.c.drawString(195, self.curr_y - 23, "TEST METHOD")
+        self.c.drawString(315, self.curr_y - 23, "RESULT")
+        self.c.drawString(410, self.curr_y - 23, "UNIT")
+        self.c.drawString(455, self.curr_y - 23, "REFERENCE INTERVAL")
 
-        y = self.curr_y - 36
+        y = self.curr_y - 40
         for param, (val, method, unit, ref, low_val, high_val) in active_rows.items():
             val_str = str(val).strip()
             v_num = safe_float(val_str)
@@ -1089,33 +1099,34 @@ class PDFReportManager:
                     is_abnormal = True
                     flag_suffix = " *"
 
-            self.c.setFont("Helvetica", 6.8)
+            self.c.setFont("Helvetica", 7.2)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(38, y, str(param)[:32])
             
-            self.c.setFont("Helvetica-Oblique", 6.2)
+            self.c.setFont("Helvetica-Oblique", 6.5)
             self.c.setFillColor(colors.HexColor("#64748b"))
             self.c.drawString(195, y, str(method)[:24])
 
             if is_abnormal:
-                self.c.setFont("Helvetica-Bold", 6.8)
+                self.c.setFont("Helvetica-Bold", 7.2)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
                 self.c.drawString(315, y, f"{val_str[:22]}{flag_suffix}")
             else:
-                self.c.setFont("Helvetica", 6.8)
+                self.c.setFont("Helvetica", 7.2)
                 self.c.setFillColor(colors.HexColor("#0f172a"))
                 self.c.drawString(315, y, str(val_str)[:24])
 
-            self.c.setFont("Helvetica", 6.8)
+            self.c.setFont("Helvetica", 7.2)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(410, y, str(unit)[:8])
             self.c.drawString(455, y, str(ref)[:25])
 
+            # Space padding divider line under each parameter
             self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
-            self.c.line(32, y - 2, self.width - 32, y - 2)
-            y -= 10.8
+            self.c.line(32, y - 4.5, self.width - 32, y - 4.5)
+            y -= row_pitch
 
-        self.curr_y = y - 8
+        self.curr_y = y - 6
 
         if self.separate_pages_mode and kb_key:
             self.print_knowledge_box(kb_key)
@@ -1163,7 +1174,7 @@ else:
             doc.print_section("LIPID", "CLINICAL BIOCHEMISTRY - LIPID PROFILE", final_report_sections["LIPID"], "#be123c", is_first_on_page=first_section)
             first_section = False
 
-        # 5. DENGUE (Combo or Single NS1)
+        # 5. DENGUE
         if "DENGUE_PROFILE" in final_report_sections:
             doc.print_section("DENGUE", "SEROLOGY - DENGUE COMPLETE PROFILE (NS1 + IgM + IgG)", final_report_sections["DENGUE_PROFILE"], "#b45309", is_first_on_page=first_section)
             first_section = False
@@ -1171,7 +1182,7 @@ else:
             doc.print_section("DENGUE", "SEROLOGY - DENGUE NS1 ANTIGEN RAPID TEST", final_report_sections["DENGUE_NS1"], "#b45309", is_first_on_page=first_section)
             first_section = False
 
-        # 6. VIRAL MARKERS (Combo or Individual)
+        # 6. VIRAL MARKERS
         if "VIRAL_PROFILE" in final_report_sections:
             doc.print_section("VIRAL", "IMMUNOLOGY & SEROLOGY - VIRAL MARKERS SCREENING (4-IN-1)", final_report_sections["VIRAL_PROFILE"], "#991b1b", is_first_on_page=first_section)
             first_section = False
@@ -1188,7 +1199,7 @@ else:
             doc.print_section("VIRAL", "SEROLOGY - VDRL / RPR TEST FOR SYPHILIS", final_report_sections["VDRL_SINGLE"], "#991b1b", is_first_on_page=first_section)
             first_section = False
 
-        # 7. INFLAMMATORY (Individual CRP & RA)
+        # 7. INFLAMMATORY
         if "CRP_SINGLE" in final_report_sections:
             doc.print_section("CRP", "CLINICAL BIOCHEMISTRY - C-REACTIVE PROTEIN (CRP)", final_report_sections["CRP_SINGLE"], "#0369a1", is_first_on_page=first_section)
             first_section = False
@@ -1196,7 +1207,7 @@ else:
             doc.print_section("RA", "SEROLOGY & IMMUNOLOGY - RHEUMATOID FACTOR (RA / RF)", final_report_sections["RA_SINGLE"], "#0369a1", is_first_on_page=first_section)
             first_section = False
 
-        # 8. INDIVIDUAL BIOCHEMISTRY (Creatinine, Uric Acid, Calcium)
+        # 8. INDIVIDUAL BIOCHEMISTRY
         if "CREATININE_SINGLE" in final_report_sections:
             doc.print_section("CREATININE", "CLINICAL BIOCHEMISTRY - SERUM CREATININE", final_report_sections["CREATININE_SINGLE"], "#047857", is_first_on_page=first_section)
             first_section = False
