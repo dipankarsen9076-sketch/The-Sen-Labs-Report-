@@ -16,7 +16,7 @@ st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wid
 st.title("The Sen Labs - Clinical Diagnostic System")
 
 # ==============================================================================
-# 📷 1. DEFAULT BACK CAMERA SETUP
+# 📷 1. DEFAULT BACK CAMERA SETUP (MOBILE REAR CAMERA PREFERENCE)
 # ==============================================================================
 st.markdown(
     """
@@ -138,12 +138,10 @@ def safe_float(val):
     except:
         return None
 
-# Ultra-Fast Image Compressor (Reduces network latency from seconds to milliseconds)
 def compress_image_for_fast_ai(img_file):
     img = Image.open(img_file)
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
-    # Resize to optimal OCR resolution without degrading numeric readability
     img.thumbnail((900, 900), Image.Resampling.BILINEAR)
     out_bytes = io.BytesIO()
     img.save(out_bytes, format="JPEG", quality=75, optimize=True)
@@ -151,7 +149,7 @@ def compress_image_for_fast_ai(img_file):
 
 final_report_sections = {}
 
-# ----------------- SECTION 1: CBC + GBP -----------------
+# ----------------- SECTION 1: CBC + GBP WITH MULTI-MODEL FAILOVER -----------------
 if "Complete Blood Count (CBC + GBP)" in selected_profiles:
     st.markdown("---")
     st.subheader("🩸 Complete Blood Count (CBC) with Auto Absolute Calculations")
@@ -166,40 +164,66 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         if not api_key:
             st.error("Pehle sidebar me Gemini API Key dalein!")
         else:
-            with st.spinner("⚡ Extracting CBC indices instantly..."):
+            with st.spinner("⚡ Connecting to AI Cluster & Extracting Parameters..."):
                 try:
                     client = genai.Client(api_key=api_key)
                     optimized = compress_image_for_fast_ai(cbc_img)
                     
                     prompt = """
-                    Extract numerical hematology parameters from this hematology analyzer display.
+                    Extract all numerical hematology values from this hematology analyzer screen or printout slip.
                     Respond ONLY with a valid JSON object matching these exact numeric keys:
                     {"WBC": "", "RBC": "", "HGB": "", "HCT": "", "MCV": "", "MCH": "", "MCHC": "", 
                      "RDWA": "", "RDW_PERCENT": "", "PLT": "", "MPV": "", "PDW": "", "PCT": "", "LPCR": "", 
                      "LYM_PERCENT": "", "LYM_ABSOLUTE": "", "MID_PERCENT": "", "MID_ABSOLUTE": "", "GRAN_PERCENT": "", "GRAN_ABSOLUTE": ""}
-                    Do not add Markdown formatting or explanations. Output pure JSON.
+                    Do not add explanations or Markdown backticks. Output strictly valid JSON.
                     """
                     
-                    # Direct, fast single-call with temperature=0 for zero reasoning latency
-                    resp = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=[
-                            types.Part.from_bytes(data=optimized, mime_type="image/jpeg"),
-                            prompt
-                        ]
-                    )
+                    # Complete Failover Model Cascade (agar pehla busy ho to dusre par jaye)
+                    GEMINI_MODELS_CASCADE = [
+                        "gemini-3.6-flash",
+                        "gemini-3.7-flash",
+                        "gemini-3.5-flash",
+                        "gemini-3.5-flash-lite",
+                        "gemini-3.1-pro-preview",
+                        "gemini-1.5-flash",
+                        "gemini-1.5-pro"
+                    ]
                     
-                    cleaned = re.sub(r"^```json\s*|\s*```$", "", resp.text.strip(), flags=re.M).strip()
-                    # Clean potential non-JSON prefix/suffix
-                    s_idx = cleaned.find("{")
-                    e_idx = cleaned.rfind("}")
-                    if s_idx != -1 and e_idx != -1:
-                        cleaned = cleaned[s_idx:e_idx+1]
-                        
-                    st.session_state.cbc_raw_data = json.loads(cleaned)
-                    st.success("✅ Extracted successfully in seconds!")
+                    extracted_json = None
+                    active_used_model = None
+                    error_logs = []
+                    
+                    for m in GEMINI_MODELS_CASCADE:
+                        try:
+                            resp = client.models.generate_content(
+                                model=m,
+                                contents=[
+                                    types.Part.from_bytes(data=optimized, mime_type="image/jpeg"),
+                                    prompt
+                                ]
+                            )
+                            cleaned = re.sub(r"^```json\s*|\s*```$", "", resp.text.strip(), flags=re.M).strip()
+                            s_idx = cleaned.find("{")
+                            e_idx = cleaned.rfind("}")
+                            if s_idx != -1 and e_idx != -1:
+                                cleaned = cleaned[s_idx:e_idx+1]
+                                
+                            parsed = json.loads(cleaned)
+                            if isinstance(parsed, dict) and len(parsed) > 0:
+                                extracted_json = parsed
+                                active_used_model = m
+                                break
+                        except Exception as err:
+                            error_logs.append(f"{m}: {str(err)[:80]}")
+                            continue  # Agle model par switch karega bina user ko roke
+                            
+                    if extracted_json:
+                        st.session_state.cbc_raw_data = extracted_json
+                        st.success(f"✅ Data extracted successfully via `{active_used_model}`!")
+                    else:
+                        st.error(f"All AI models currently busy. Details: {error_logs}")
                 except Exception as e:
-                    st.error(f"OCR Error: {e}")
+                    st.error(f"OCR System Error: {e}")
 
     cbc_cols = st.columns(4)
     c_raw = st.session_state.cbc_raw_data
@@ -971,7 +995,7 @@ class PDFReportManager:
 
         self.curr_y = 62
 
-    # CBC + GBP: METHOD DIRECTLY UNDER PARAMETER NAME WITH SPACING
+    # CBC + GBP: METHOD DIRECTLY UNDER PARAMETER NAME WITH PROPER SPACING
     def print_cbc_and_gbp_together(self, cbc_items, gbp_data):
         active_rows = {k: v for k, v in cbc_items.items() if str(v[0]).strip() != ""}
         
@@ -1086,6 +1110,7 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, title)
 
+        # 4 Clean Columns Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 26, self.width - 64, 13, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
