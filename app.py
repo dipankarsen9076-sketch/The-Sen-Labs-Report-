@@ -6,6 +6,9 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+from reportlab.graphics.barcode.qr import QrCodeWidget
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics import renderPDF
 import io
 import json
 import re
@@ -178,7 +181,6 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
                     Do not add explanations or Markdown backticks. Output strictly valid JSON.
                     """
                     
-                    # Complete Failover Model Cascade (agar pehla busy ho to dusre par jaye)
                     GEMINI_MODELS_CASCADE = [
                         "gemini-3.6-flash",
                         "gemini-3.7-flash",
@@ -215,7 +217,7 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
                                 break
                         except Exception as err:
                             error_logs.append(f"{m}: {str(err)[:80]}")
-                            continue  # Agle model par switch karega bina user ko roke
+                            continue
                             
                     if extracted_json:
                         st.session_state.cbc_raw_data = extracted_json
@@ -905,15 +907,53 @@ class PDFReportManager:
     def draw_footer(self):
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
         self.c.line(32, 54, self.width - 32, 54)
+        
+        # Left: Lab Technologist Signature
         self.c.setFont("Helvetica-Bold", 7.5)
         self.c.setFillColor(colors.HexColor("#0f172a"))
         self.c.drawString(42, 42, "Dipankar Sen")
-        self.c.drawString(self.width - 190, 42, "Dr. R. K. Banerjee")
         self.c.setFont("Helvetica", 6.8)
         self.c.setFillColor(colors.HexColor("#64748b"))
         self.c.drawString(42, 32, "Medical Lab Technologist (DMLT / BSS)")
+        self.c.drawString(42, 22, "Verified & Digitally Processed")
+
+        # Right: Consultant Pathologist Signature & Page Count
+        self.c.setFont("Helvetica-Bold", 7.5)
+        self.c.setFillColor(colors.HexColor("#0f172a"))
+        self.c.drawString(self.width - 190, 42, "Dr. R. K. Banerjee")
+        self.c.setFont("Helvetica", 6.8)
+        self.c.setFillColor(colors.HexColor("#64748b"))
         self.c.drawString(self.width - 190, 32, "Consultant Pathologist (MD Path)")
-        self.c.drawRightString(self.width / 2 + 15, 32, f"Page {self.page_number}")
+        self.c.drawRightString(self.width - 42, 22, f"Page {self.page_number}")
+
+        # Center: Scannable Patient Verification QR Code
+        try:
+            qr_content = (
+                f"THE SEN LABS - REPORT VERIFICATION\n"
+                f"Sample ID / Lab No: {self.p['sample_id']}\n"
+                f"Patient Name: Mr./Ms. {self.p['name']}\n"
+                f"Age / Sex: {self.p['age']} Yrs / {self.p['sex']}\n"
+                f"Referred By: Dr. {self.p['doctor']}\n"
+                f"Reported On: {self.report_dt_str}\n"
+                f"Status: Authenticated & Digitally Signed"
+            )
+            qr_widget = QrCodeWidget(qr_content)
+            bounds = qr_widget.getBounds()
+            w = bounds[2] - bounds[0]
+            h = bounds[3] - bounds[1]
+            qr_dimension = 36
+            d = Drawing(qr_dimension, qr_dimension, transform=[qr_dimension / w, 0, 0, qr_dimension / h, 0, 0])
+            d.add(qr_widget)
+            
+            qr_x = (self.width - qr_dimension) / 2
+            qr_y = 13
+            renderPDF.draw(d, self.c, qr_x, qr_y)
+            
+            self.c.setFont("Helvetica-Bold", 5.2)
+            self.c.setFillColor(colors.HexColor("#1e3a8a"))
+            self.c.drawCentredString(self.width / 2, 7, "SCAN TO VERIFY")
+        except Exception:
+            pass
 
     def new_page(self):
         self.draw_footer()
@@ -1005,7 +1045,6 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, "COMPLETE BLOOD COUNT (AUTOMATED HEMATOLOGY WITH ABSOLUTE INDICES)")
 
-        # 4 Clean Columns Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 25, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
@@ -1031,18 +1070,15 @@ class PDFReportManager:
                     is_abnormal = True
                     flag_suffix = " (H) ▲"
 
-            # 1. Parameter Name (Top Line)
             self.c.setFont("Helvetica-Bold", 6.7)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(38, y, str(param)[:45])
             
-            # 2. Test Method (Directly Underneath Parameter Name)
             if method:
                 self.c.setFont("Helvetica-Oblique", 5.6)
                 self.c.setFillColor(colors.HexColor("#64748b"))
                 self.c.drawString(38, y - 6.8, f"Method: {str(method)[:38]}")
 
-            # 3. Result Value
             if is_abnormal:
                 self.c.setFont("Helvetica-Bold", 7.0)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
@@ -1052,18 +1088,15 @@ class PDFReportManager:
                 self.c.setFillColor(colors.HexColor("#0f172a"))
                 self.c.drawString(290, y - 1, str(val_str)[:20])
 
-            # 4. Unit & Biological Reference Interval
             self.c.setFont("Helvetica", 6.6)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(395, y - 1, str(unit)[:10])
             self.c.drawString(455, y - 1, str(ref)[:25])
 
-            # Divider line below the method
             self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
             self.c.line(32, y - 9.0, self.width - 32, y - 9.0)
             y -= row_pitch
 
-        # GBP Section on SAME PAGE
         gbp_top = y - 4
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
         self.c.rect(32, gbp_top, self.width - 64, 11, fill=True, stroke=False)
@@ -1110,7 +1143,6 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, title)
 
-        # 4 Clean Columns Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 26, self.width - 64, 13, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
@@ -1139,18 +1171,15 @@ class PDFReportManager:
                     is_abnormal = True
                     flag_suffix = " *"
 
-            # 1. Parameter Name (Top Line)
             self.c.setFont("Helvetica-Bold", 7.2)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(38, y, str(param)[:45])
             
-            # 2. Test Method (Directly Underneath Parameter Name)
             if method and method != "--":
                 self.c.setFont("Helvetica-Oblique", 6.0)
                 self.c.setFillColor(colors.HexColor("#64748b"))
                 self.c.drawString(38, y - 7.5, f"Method: {str(method)[:38]}")
 
-            # 3. Result Value
             if is_abnormal:
                 self.c.setFont("Helvetica-Bold", 7.4)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
@@ -1160,13 +1189,11 @@ class PDFReportManager:
                 self.c.setFillColor(colors.HexColor("#0f172a"))
                 self.c.drawString(290, y - 2, str(val_str)[:24])
 
-            # 4. Unit & Biological Reference Interval
             self.c.setFont("Helvetica", 7.0)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(395, y - 2, str(unit)[:10])
             self.c.drawString(455, y - 2, str(ref)[:25])
 
-            # Space padding divider line under the parameter block
             self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
             self.c.line(32, y - 10.5, self.width - 32, y - 10.5)
             y -= row_pitch
