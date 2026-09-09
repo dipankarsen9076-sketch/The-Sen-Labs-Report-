@@ -258,7 +258,7 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
 
     final_report_sections["CBC"] = {
         "items": {
-            "Hemoglobin (Hb)": (hgb, "SLS Method", "g/dL", "13.0 - 17.0", 13.0, 17.0),
+            "Hemoglobin (Hb)": (hgb, "SLS Photometry", "g/dL", "13.0 - 17.0", 13.0, 17.0),
             "Total Leukocyte Count (TLC)": (wbc, "Electrical Impedance", "10^3/uL", "4.0 - 10.0", 4.0, 10.0),
             "Total RBC Count": (rbc, "Electrical Impedance", "10^6/uL", "4.50 - 5.50", 4.50, 5.50),
             "Packed Cell Volume (PCV)": (hct, "Calculated", "%", "40.0 - 50.0", 40.0, 50.0),
@@ -959,7 +959,7 @@ class PDFReportManager:
 
         self.curr_y = 62
 
-    # CBC + GBP TOGETHER ON PAGE 1 (CLEAR SPACING & PADDING BETWEEN ROWS)
+    # CBC + GBP: METHOD DIRECTLY UNDER PARAMETER NAME
     def print_cbc_and_gbp_together(self, cbc_items, gbp_data):
         active_rows = {k: v for k, v in cbc_items.items() if str(v[0]).strip() != ""}
         
@@ -969,19 +969,18 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, "COMPLETE BLOOD COUNT (AUTOMATED HEMATOLOGY WITH ABSOLUTE INDICES)")
 
+        # 4 Clean Columns Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 25, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
         self.c.setFont("Helvetica-Bold", 6.5)
         self.c.drawString(38, self.curr_y - 22, "TEST / INVESTIGATION")
-        self.c.drawString(195, self.curr_y - 22, "TEST METHOD")
-        self.c.drawString(315, self.curr_y - 22, "RESULT")
-        self.c.drawString(410, self.curr_y - 22, "UNIT")
-        self.c.drawString(455, self.curr_y - 22, "REFERENCE INTERVAL")
+        self.c.drawString(290, self.curr_y - 22, "RESULT")
+        self.c.drawString(395, self.curr_y - 22, "UNIT")
+        self.c.drawString(455, self.curr_y - 22, "BIOLOGICAL REFERENCE INTERVAL")
 
-        y = self.curr_y - 37
-        # Comfortable row spacing (12.2 pt) so parameters never touch
-        row_pitch = 12.2
+        y = self.curr_y - 36
+        row_pitch = 14.5  # Two-line vertical room for parameter + method underneath
         for param, (val, method, unit, ref, low_val, high_val) in active_rows.items():
             val_str = str(val).strip()
             v_num = safe_float(val_str)
@@ -996,31 +995,36 @@ class PDFReportManager:
                     is_abnormal = True
                     flag_suffix = " (H) ▲"
 
-            self.c.setFont("Helvetica", 6.6)
+            # 1. Parameter Name (Top Line)
+            self.c.setFont("Helvetica-Bold", 6.7)
             self.c.setFillColor(colors.HexColor("#0f172a"))
-            self.c.drawString(38, y, str(param)[:34])
+            self.c.drawString(38, y, str(param)[:45])
             
-            self.c.setFont("Helvetica-Oblique", 6.0)
-            self.c.setFillColor(colors.HexColor("#64748b"))
-            self.c.drawString(195, y, str(method)[:24])
+            # 2. Test Method (Directly Underneath Parameter Name)
+            if method:
+                self.c.setFont("Helvetica-Oblique", 5.6)
+                self.c.setFillColor(colors.HexColor("#64748b"))
+                self.c.drawString(38, y - 6.8, f"Method: {str(method)[:38]}")
 
+            # 3. Result Value
             if is_abnormal:
-                self.c.setFont("Helvetica-Bold", 6.8)
+                self.c.setFont("Helvetica-Bold", 7.0)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
-                self.c.drawString(315, y, f"{val_str[:20]}{flag_suffix}")
+                self.c.drawString(290, y - 1, f"{val_str[:20]}{flag_suffix}")
             else:
-                self.c.setFont("Helvetica", 6.6)
+                self.c.setFont("Helvetica", 6.8)
                 self.c.setFillColor(colors.HexColor("#0f172a"))
-                self.c.drawString(315, y, str(val_str)[:20])
+                self.c.drawString(290, y - 1, str(val_str)[:20])
 
+            # 4. Unit & Biological Reference Interval
             self.c.setFont("Helvetica", 6.6)
             self.c.setFillColor(colors.HexColor("#0f172a"))
-            self.c.drawString(410, y, str(unit)[:8])
-            self.c.drawString(455, y, str(ref)[:25])
+            self.c.drawString(395, y - 1, str(unit)[:10])
+            self.c.drawString(455, y - 1, str(ref)[:25])
 
-            # Clear divider line with 3.5 pt spacing underneath each parameter
+            # Divider line below the method
             self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
-            self.c.line(32, y - 3.5, self.width - 32, y - 3.5)
+            self.c.line(32, y - 9.0, self.width - 32, y - 9.0)
             y -= row_pitch
 
         # GBP Section on SAME PAGE
@@ -1049,18 +1053,18 @@ class PDFReportManager:
         self.curr_y = box_top - 42
         self.print_knowledge_box("CBC")
 
-    # GENERAL SECTION RENDERER WITH GENEROUS 16.5 PT VERTICAL SPACING
+    # GENERAL SECTION RENDERER: METHOD DIRECTLY UNDER PARAMETER NAME
     def print_section(self, kb_key, title, data_dict, bar_hex, is_first_on_page=False):
         active_rows = {k: v for k, v in data_dict.items() if str(v[0]).strip() != ""}
         if not active_rows:
             return
 
-        row_pitch = 16.5  # Generous vertical space between each parameter
+        row_pitch = 18.0  # Room for parameter name, method underneath, and space
 
         if self.separate_pages_mode and not is_first_on_page:
             self.new_page()
         else:
-            needed = 40 + (len(active_rows) * row_pitch)
+            needed = 42 + (len(active_rows) * row_pitch)
             if self.curr_y - needed < 65:
                 self.new_page()
 
@@ -1070,17 +1074,17 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, title)
 
+        # 4 Clean Columns Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 26, self.width - 64, 13, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
         self.c.setFont("Helvetica-Bold", 6.6)
         self.c.drawString(38, self.curr_y - 23, "TEST / INVESTIGATION")
-        self.c.drawString(195, self.curr_y - 23, "TEST METHOD")
-        self.c.drawString(315, self.curr_y - 23, "RESULT")
-        self.c.drawString(410, self.curr_y - 23, "UNIT")
-        self.c.drawString(455, self.curr_y - 23, "REFERENCE INTERVAL")
+        self.c.drawString(290, self.curr_y - 23, "RESULT")
+        self.c.drawString(395, self.curr_y - 23, "UNIT")
+        self.c.drawString(455, self.curr_y - 23, "BIOLOGICAL REFERENCE INTERVAL")
 
-        y = self.curr_y - 40
+        y = self.curr_y - 41
         for param, (val, method, unit, ref, low_val, high_val) in active_rows.items():
             val_str = str(val).strip()
             v_num = safe_float(val_str)
@@ -1099,31 +1103,36 @@ class PDFReportManager:
                     is_abnormal = True
                     flag_suffix = " *"
 
-            self.c.setFont("Helvetica", 7.2)
+            # 1. Parameter Name (Top Line)
+            self.c.setFont("Helvetica-Bold", 7.2)
             self.c.setFillColor(colors.HexColor("#0f172a"))
-            self.c.drawString(38, y, str(param)[:32])
+            self.c.drawString(38, y, str(param)[:45])
             
-            self.c.setFont("Helvetica-Oblique", 6.5)
-            self.c.setFillColor(colors.HexColor("#64748b"))
-            self.c.drawString(195, y, str(method)[:24])
+            # 2. Test Method (Directly Underneath Parameter Name)
+            if method and method != "--":
+                self.c.setFont("Helvetica-Oblique", 6.0)
+                self.c.setFillColor(colors.HexColor("#64748b"))
+                self.c.drawString(38, y - 7.5, f"Method: {str(method)[:38]}")
 
+            # 3. Result Value
             if is_abnormal:
-                self.c.setFont("Helvetica-Bold", 7.2)
+                self.c.setFont("Helvetica-Bold", 7.4)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
-                self.c.drawString(315, y, f"{val_str[:22]}{flag_suffix}")
+                self.c.drawString(290, y - 2, f"{val_str[:22]}{flag_suffix}")
             else:
                 self.c.setFont("Helvetica", 7.2)
                 self.c.setFillColor(colors.HexColor("#0f172a"))
-                self.c.drawString(315, y, str(val_str)[:24])
+                self.c.drawString(290, y - 2, str(val_str)[:24])
 
-            self.c.setFont("Helvetica", 7.2)
+            # 4. Unit & Biological Reference Interval
+            self.c.setFont("Helvetica", 7.0)
             self.c.setFillColor(colors.HexColor("#0f172a"))
-            self.c.drawString(410, y, str(unit)[:8])
-            self.c.drawString(455, y, str(ref)[:25])
+            self.c.drawString(395, y - 2, str(unit)[:10])
+            self.c.drawString(455, y - 2, str(ref)[:25])
 
-            # Space padding divider line under each parameter
+            # Space padding divider line under the parameter block
             self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
-            self.c.line(32, y - 4.5, self.width - 32, y - 4.5)
+            self.c.line(32, y - 10.5, self.width - 32, y - 10.5)
             y -= row_pitch
 
         self.curr_y = y - 6
