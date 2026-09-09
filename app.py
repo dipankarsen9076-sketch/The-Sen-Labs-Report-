@@ -16,10 +16,98 @@ from datetime import datetime
 import os
 
 st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wide")
-st.title("The Sen Labs - Clinical Diagnostic System")
 
 # ==============================================================================
-# 📷 1. DEFAULT BACK CAMERA SETUP (MOBILE REAR CAMERA PREFERENCE)
+# 🎨 PROFESSIONAL CLINICAL UI STYLING (MODERN GLASSMORPHIC THEME)
+# ==============================================================================
+st.markdown("""
+<style>
+    /* Main Background */
+    .stApp {
+        background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%) !important;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    }
+    
+    /* Top Brand Card Header */
+    .brand-header-box {
+        background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        border-radius: 14px;
+        padding: 20px 24px;
+        color: white;
+        margin-bottom: 25px;
+        box-shadow: 0 10px 15px -3px rgba(30, 58, 138, 0.25);
+    }
+    .brand-title {
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        margin: 0;
+        color: #ffffff !important;
+    }
+    .brand-sub {
+        font-size: 13px;
+        color: #bfdbfe;
+        margin-top: 4px;
+    }
+
+    /* Section Subheadings */
+    h2, h3 {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+
+    /* Modern Input Boxes with Soft Shadow */
+    .stTextInput input, .stSelectbox select, .stMultiSelect {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 10px !important;
+        padding: 10px 14px !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03) !important;
+        font-size: 14px !important;
+        color: #0f172a !important;
+    }
+    .stTextInput input:focus {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    }
+
+    /* Primary Generate Button */
+    .stButton button {
+        background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 12px 28px !important;
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3) !important;
+        transition: all 0.2s ease-in-out;
+    }
+    .stButton button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(37, 99, 235, 0.4) !important;
+    }
+
+    /* Archived History Expander */
+    .streamlit-expanderHeader {
+        background-color: #ffffff !important;
+        border-radius: 10px !important;
+        border: 1px solid #cbd5e1 !important;
+        font-weight: 600 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Custom Brand Card
+st.markdown("""
+<div class="brand-header-box">
+    <div class="brand-title">THE SEN LABS</div>
+    <div class="brand-sub">Advanced Clinical Diagnostics & Pathology Reporting Suite | Automated Laboratory System</div>
+</div>
+""", unsafe_allow_html=True)
+
+# ==============================================================================
+# 📷 1. DEFAULT BACK CAMERA SETUP
 # ==============================================================================
 st.markdown(
     """
@@ -77,18 +165,19 @@ api_key = st.session_state.saved_api_key
 REPORT_DIR = "generated_reports"
 os.makedirs(REPORT_DIR, exist_ok=True)
 
-# 1. Patient Details
+# 1. Patient Details (WITH PATIENT MOBILE NUMBER)
 st.subheader("1. Patient & Sample Information")
 c1, c2, c3 = st.columns(3)
 with c1:
-    p_name = st.text_input("Patient Name", value="")
+    p_name = st.text_input("Patient Full Name", value="")
     p_age = st.text_input("Age", value="")
 with c2:
-    p_sex = st.selectbox("Sex", ["Male (M)", "Female (F)", "Other"])
-    p_doctor = st.text_input("Referred By (Doctor)", value="Self")
+    p_sex = st.selectbox("Sex / Gender", ["Male (M)", "Female (F)", "Other"])
+    p_phone = st.text_input("Patient Mobile Number", placeholder="e.g. +91 XXXXX XXXXX", value="")
 with c3:
-    p_contact = st.text_input("Lab Helpline", value="9076816740")
+    p_doctor = st.text_input("Referred By (Doctor)", value="Self")
     sample_id = st.text_input("Sample ID / Lab No.", value=f"TSL-{datetime.now().strftime('%y%m%d%H%M')}")
+    p_contact = "9076816740"
 
 # 2. Multi-Test Profile Selector
 st.subheader("2. Select Test Profiles for Patient")
@@ -821,7 +910,7 @@ class PDFReportManager:
         self.width, self.height = letter
         self.p = p_dict
         self.separate_pages_mode = separate_pages_mode
-        self.curr_y = self.height - 134
+        self.curr_y = self.height - 138
         self.page_number = 1
         self.now_dt = datetime.now()
         self.report_dt_str = self.now_dt.strftime("%d-%b-%Y %I:%M:%S %p")
@@ -829,6 +918,7 @@ class PDFReportManager:
         self.draw_header()
 
     def draw_header(self):
+        # Top Royal Navy Blue Banner
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
         self.c.rect(0, self.height - 62, self.width, 62, fill=True, stroke=False)
         
@@ -879,30 +969,33 @@ class PDFReportManager:
         self.c.drawString(text_x_pos, self.height - 44, "ADVANCED PATHOLOGY & CLINICAL BIOCHEMISTRY | AUTOMATED DIAGNOSTICS")
         self.c.drawRightString(self.width - 32, self.height - 34, f"Helpdesk: +91 {self.p['contact']}")
         
+        # Patient Info Box (WITH PATIENT MOBILE NUMBER)
         self.c.setFillColor(colors.HexColor("#f8fafc"))
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
-        self.c.roundRect(32, self.height - 122, self.width - 64, 56, 3, fill=True, stroke=True)
+        self.c.roundRect(32, self.height - 128, self.width - 64, 62, 3, fill=True, stroke=True)
         
         self.c.setFillColor(colors.HexColor("#475569"))
-        self.c.setFont("Helvetica-Bold", 7.5)
-        self.c.drawString(42, self.height - 80, "Patient Name:")
-        self.c.drawString(42, self.height - 94, "Age / Sex:")
-        self.c.drawString(42, self.height - 108, "Referred By:")
+        self.c.setFont("Helvetica-Bold", 7.2)
+        self.c.drawString(42, self.height - 78, "Patient Name:")
+        self.c.drawString(42, self.height - 91, "Age / Sex:")
+        self.c.drawString(42, self.height - 104, "Mobile No:")
+        self.c.drawString(42, self.height - 117, "Referred By:")
         
-        self.c.setFont("Helvetica", 7.5)
-        self.c.drawString(108, self.height - 80, f"Mr./Ms. {self.p['name']}")
-        self.c.drawString(108, self.height - 94, f"{self.p['age']} Yrs / {self.p['sex']}")
-        self.c.drawString(108, self.height - 108, f"Dr. {self.p['doctor']}")
+        self.c.setFont("Helvetica", 7.2)
+        self.c.drawString(108, self.height - 78, f"Mr./Ms. {self.p['name']}")
+        self.c.drawString(108, self.height - 91, f"{self.p['age']} Yrs / {self.p['sex']}")
+        self.c.drawString(108, self.height - 104, f"{self.p.get('phone', '--') or '--'}")
+        self.c.drawString(108, self.height - 117, f"Dr. {self.p['doctor']}")
         
-        self.c.setFont("Helvetica-Bold", 7.5)
-        self.c.drawString(310, self.height - 80, "Sample ID:")
-        self.c.drawString(310, self.height - 94, "Collection Time:")
-        self.c.drawString(310, self.height - 108, "Reporting Date & Time:")
+        self.c.setFont("Helvetica-Bold", 7.2)
+        self.c.drawString(310, self.height - 78, "Sample ID:")
+        self.c.drawString(310, self.height - 91, "Collection Time:")
+        self.c.drawString(310, self.height - 104, "Reporting Date & Time:")
         
-        self.c.setFont("Helvetica", 7.5)
-        self.c.drawString(405, self.height - 80, self.p['sample_id'])
-        self.c.drawString(405, self.height - 94, self.coll_dt_str)
-        self.c.drawString(405, self.height - 108, self.report_dt_str)
+        self.c.setFont("Helvetica", 7.2)
+        self.c.drawString(405, self.height - 78, self.p['sample_id'])
+        self.c.drawString(405, self.height - 91, self.coll_dt_str)
+        self.c.drawString(405, self.height - 104, self.report_dt_str)
 
     def draw_footer(self):
         # 1. Horizontal Divider Line
@@ -927,9 +1020,8 @@ class PDFReportManager:
         self.c.drawString(self.width - 190, 32, "Consultant Pathologist (MD Path)")
         self.c.drawRightString(self.width - 42, 22, f"Page {self.page_number}")
 
-        # 4. PURE SIMPLE QR CODE IN MARKED RED AREA (ZERO TEXT AROUND IT)
+        # 4. PURE SIMPLE QR CODE (ZERO TEXT - SCANS ONLY PATIENT NAME, AGE, GENDER)
         try:
-            # Clean string with ONLY Name, Age, and Gender
             qr_content = (
                 f"Patient Name: Mr./Ms. {self.p['name']}\n"
                 f"Age: {self.p['age']} Yrs\n"
@@ -943,7 +1035,7 @@ class PDFReportManager:
             d = Drawing(qr_dimension, qr_dimension, transform=[qr_dimension / w, 0, 0, qr_dimension / h, 0, 0])
             d.add(qr_widget)
             
-            # Positioned right in the center above footer line (red marked box location)
+            # Positioned in the center of the marked red box (above footer line)
             qr_x = (self.width - qr_dimension) / 2
             qr_y = 66
             renderPDF.draw(d, self.c, qr_x, qr_y)
@@ -955,7 +1047,7 @@ class PDFReportManager:
         self.c.showPage()
         self.page_number += 1
         self.draw_header()
-        self.curr_y = self.height - 134
+        self.curr_y = self.height - 138
 
     def print_wrapped_text(self, prefix, text, start_y, max_width=530):
         self.c.setFont("Helvetica-Bold", 6.2)
@@ -1226,6 +1318,7 @@ else:
             "name": p_name or "Anonymous",
             "age": p_age or "--",
             "sex": p_sex,
+            "phone": p_phone or "--",
             "doctor": p_doctor or "Self",
             "contact": p_contact or "9076816740",
             "sample_id": sample_id
