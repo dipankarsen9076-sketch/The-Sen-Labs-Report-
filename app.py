@@ -18,7 +18,7 @@ import os
 st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wide")
 
 # ==============================================================================
-# 🎨 PROFESSIONAL CLINICAL UI STYLING (MODERN GLASSMORPHIC THEME)
+# 🎨 PROFESSIONAL CLINICAL UI STYLING
 # ==============================================================================
 st.markdown("""
 <style>
@@ -123,9 +123,10 @@ st.markdown(
 )
 
 # ==============================================================================
-# 🔑 2. PERMANENT API KEY MANAGEMENT
+# 🔑 2. PERMANENT API KEY & LETTERHEAD MANAGEMENT
 # ==============================================================================
 KEY_FILE = "api_key.txt"
+LETTERHEAD_FILE = "letterhead.png"
 
 def load_saved_key():
     if os.path.exists(KEY_FILE):
@@ -160,12 +161,37 @@ with st.sidebar:
     else:
         st.warning("⚠️ Enter API key once for slip OCR.")
 
+    st.markdown("---")
+    st.markdown("### 🏛️ Lab Letterhead (Header/Footer Pad)")
+    
+    has_letterhead = os.path.exists(LETTERHEAD_FILE)
+    if has_letterhead:
+        st.success("✅ Custom Letterhead currently active!")
+        if st.button("🗑️ Remove / Reset Letterhead"):
+            try:
+                os.remove(LETTERHEAD_FILE)
+                st.rerun()
+            except:
+                pass
+    else:
+        st.info("ℹ️ Agar aapka apna printed pad/letterhead hai toh use yahan upload karein.")
+
+    lh_upload = st.file_uploader("Upload Letterhead Pad (PNG/JPG)", type=["png", "jpg", "jpeg"], key="lh_pad")
+    if lh_upload is not None:
+        try:
+            im = Image.open(lh_upload)
+            im.save(LETTERHEAD_FILE, format="PNG")
+            st.success("Letterhead saved permanently!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error saving letterhead: {e}")
+
 api_key = st.session_state.saved_api_key
 
 REPORT_DIR = "generated_reports"
 os.makedirs(REPORT_DIR, exist_ok=True)
 
-# 1. Patient Details (WITH PATIENT MOBILE NUMBER)
+# 1. Patient Details
 st.subheader("1. Patient & Sample Information")
 c1, c2, c3 = st.columns(3)
 with c1:
@@ -211,16 +237,15 @@ selected_profiles = st.multiselect(
     default=[]
 )
 
-# 3. Layout Preference
+# 3. Layout Preference (INDIVIDUAL vs MIX BUTTONS)
 st.subheader("3. PDF Layout Preference")
-layout_choice = st.radio(
-    "Report Formatting Mode:",
-    ("📄 Har Test Profile Alag Page Par (CBC+GBP Page 1 par ek sath, baki sab alag pages par)", 
-     "📑 Ek Sath Compact Flow (Sabhi Test Continuous Flow Mein)"),
+mode_selection = st.radio(
+    "Select Report Printing Style:",
+    ["📑 Individual (Har Test Alag Page Par)", "📜 Mix (Continuous Flow Mein)"],
     index=0,
     horizontal=True
 )
-separate_pages = "Har Test Profile Alag Page Par" in layout_choice
+separate_pages = "Individual" in mode_selection
 
 def safe_float(val):
     try:
@@ -918,56 +943,64 @@ class PDFReportManager:
         self.draw_header()
 
     def draw_header(self):
-        # Top Royal Navy Blue Banner
-        self.c.setFillColor(colors.HexColor("#1e3a8a"))
-        self.c.rect(0, self.height - 62, self.width, 62, fill=True, stroke=False)
-        
-        possible_paths = [
-            "logo.png",
-            "logo.png.png",
-            os.path.join(os.path.dirname(__file__), "logo.png"),
-            os.path.join(os.path.dirname(__file__), "logo.png.png"),
-            "/mount/src/the-sen-labs-reporting/logo.png",
-            "/mount/src/the-sen-labs-reporting/logo.png.png"
-        ]
-        
-        found_logo = None
-        for p in possible_paths:
-            if os.path.exists(p):
-                found_logo = p
-                break
-
-        text_x_pos = 32
-        if found_logo:
+        # Check if custom letterhead exists
+        if os.path.exists(LETTERHEAD_FILE):
             try:
-                orig_img = Image.open(found_logo).convert("RGBA")
-                datas = orig_img.getdata()
-                
-                new_data = []
-                for item in datas:
-                    if item[0] < 50 and item[1] < 50 and item[2] < 50:
-                        new_data.append((255, 255, 255, 0))
-                    else:
-                        new_data.append((255, 255, 255, 255))
-                        
-                orig_img.putdata(new_data)
-                
-                img_stream = io.BytesIO()
-                orig_img.save(img_stream, format="PNG")
-                img_stream.seek(0)
-                
-                reader = ImageReader(img_stream)
-                self.c.drawImage(reader, 32, self.height - 52, width=44, height=44, preserveAspectRatio=True, mask='auto')
-                text_x_pos = 84
+                reader = ImageReader(LETTERHEAD_FILE)
+                self.c.drawImage(reader, 0, 0, width=self.width, height=self.height, preserveAspectRatio=False)
             except Exception:
-                text_x_pos = 32
+                pass
+        else:
+            # Fallback default header if no custom letterhead uploaded
+            self.c.setFillColor(colors.HexColor("#1e3a8a"))
+            self.c.rect(0, self.height - 62, self.width, 62, fill=True, stroke=False)
+            
+            possible_paths = [
+                "logo.png",
+                "logo.png.png",
+                os.path.join(os.path.dirname(__file__), "logo.png"),
+                os.path.join(os.path.dirname(__file__), "logo.png.png"),
+                "/mount/src/the-sen-labs-reporting/logo.png",
+                "/mount/src/the-sen-labs-reporting/logo.png.png"
+            ]
+            
+            found_logo = None
+            for p in possible_paths:
+                if os.path.exists(p):
+                    found_logo = p
+                    break
 
-        self.c.setFillColor(colors.white)
-        self.c.setFont("Helvetica-Bold", 17)
-        self.c.drawString(text_x_pos, self.height - 28, "THE SEN LABS")
-        self.c.setFont("Helvetica", 7.5)
-        self.c.drawString(text_x_pos, self.height - 44, "ADVANCED PATHOLOGY & CLINICAL BIOCHEMISTRY | AUTOMATED DIAGNOSTICS")
-        self.c.drawRightString(self.width - 32, self.height - 34, f"Helpdesk: +91 {self.p['contact']}")
+            text_x_pos = 32
+            if found_logo:
+                try:
+                    orig_img = Image.open(found_logo).convert("RGBA")
+                    datas = orig_img.getdata()
+                    
+                    new_data = []
+                    for item in datas:
+                        if item[0] < 50 and item[1] < 50 and item[2] < 50:
+                            new_data.append((255, 255, 255, 0))
+                        else:
+                            new_data.append((255, 255, 255, 255))
+                            
+                    orig_img.putdata(new_data)
+                    
+                    img_stream = io.BytesIO()
+                    orig_img.save(img_stream, format="PNG")
+                    img_stream.seek(0)
+                    
+                    reader = ImageReader(img_stream)
+                    self.c.drawImage(reader, 32, self.height - 52, width=44, height=44, preserveAspectRatio=True, mask='auto')
+                    text_x_pos = 84
+                except Exception:
+                    text_x_pos = 32
+
+            self.c.setFillColor(colors.white)
+            self.c.setFont("Helvetica-Bold", 17)
+            self.c.drawString(text_x_pos, self.height - 28, "THE SEN LABS")
+            self.c.setFont("Helvetica", 7.5)
+            self.c.drawString(text_x_pos, self.height - 44, "ADVANCED PATHOLOGY & CLINICAL BIOCHEMISTRY | AUTOMATED DIAGNOSTICS")
+            self.c.drawRightString(self.width - 32, self.height - 34, f"Helpdesk: +91 {self.p['contact']}")
         
         # Patient Info Box (WITH PATIENT MOBILE NUMBER)
         self.c.setFillColor(colors.HexColor("#f8fafc"))
@@ -1020,7 +1053,7 @@ class PDFReportManager:
         self.c.drawString(self.width - 190, 32, "Consultant Pathologist (MD Path)")
         self.c.drawRightString(self.width - 42, 22, f"Page {self.page_number}")
 
-        # 4. PURE SIMPLE QR CODE (ZERO TEXT - SCANS ONLY PATIENT NAME, AGE, GENDER)
+        # 4. PURE SIMPLE QR CODE IN MARKED RED AREA (ZERO TEXT AROUND IT)
         try:
             qr_content = (
                 f"Patient Name: Mr./Ms. {self.p['name']}\n"
@@ -1035,7 +1068,6 @@ class PDFReportManager:
             d = Drawing(qr_dimension, qr_dimension, transform=[qr_dimension / w, 0, 0, qr_dimension / h, 0, 0])
             d.add(qr_widget)
             
-            # Positioned in the center of the marked red box (above footer line)
             qr_x = (self.width - qr_dimension) / 2
             qr_y = 66
             renderPDF.draw(d, self.c, qr_x, qr_y)
@@ -1132,7 +1164,6 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, "COMPLETE BLOOD COUNT (AUTOMATED HEMATOLOGY WITH ABSOLUTE INDICES)")
 
-        # 4 Clean Columns Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 25, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
@@ -1158,18 +1189,15 @@ class PDFReportManager:
                     is_abnormal = True
                     flag_suffix = " (H) ▲"
 
-            # 1. Parameter Name (Top Line)
             self.c.setFont("Helvetica-Bold", 6.7)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(38, y, str(param)[:45])
             
-            # 2. Test Method (Directly Underneath Parameter Name)
             if method:
                 self.c.setFont("Helvetica-Oblique", 5.6)
                 self.c.setFillColor(colors.HexColor("#64748b"))
                 self.c.drawString(38, y - 6.8, f"Method: {str(method)[:38]}")
 
-            # 3. Result Value
             if is_abnormal:
                 self.c.setFont("Helvetica-Bold", 7.0)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
@@ -1179,18 +1207,15 @@ class PDFReportManager:
                 self.c.setFillColor(colors.HexColor("#0f172a"))
                 self.c.drawString(290, y - 1, str(val_str)[:20])
 
-            # 4. Unit & Biological Reference Interval
             self.c.setFont("Helvetica", 6.6)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(395, y - 1, str(unit)[:10])
             self.c.drawString(455, y - 1, str(ref)[:25])
 
-            # Divider line below the method
             self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
             self.c.line(32, y - 9.0, self.width - 32, y - 9.0)
             y -= row_pitch
 
-        # GBP Section on SAME PAGE
         gbp_top = y - 4
         self.c.setFillColor(colors.HexColor("#1e3a8a"))
         self.c.rect(32, gbp_top, self.width - 64, 11, fill=True, stroke=False)
@@ -1237,7 +1262,6 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawString(38, self.curr_y - 9, title)
 
-        # 4 Clean Columns Header
         self.c.setFillColor(colors.HexColor("#e2e8f0"))
         self.c.rect(32, self.curr_y - 26, self.width - 64, 13, fill=True, stroke=False)
         self.c.setFillColor(colors.HexColor("#0f172a"))
@@ -1266,18 +1290,15 @@ class PDFReportManager:
                     is_abnormal = True
                     flag_suffix = " *"
 
-            # 1. Parameter Name (Top Line)
             self.c.setFont("Helvetica-Bold", 7.2)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(38, y, str(param)[:45])
             
-            # 2. Test Method (Directly Underneath Parameter Name)
             if method and method != "--":
                 self.c.setFont("Helvetica-Oblique", 6.0)
                 self.c.setFillColor(colors.HexColor("#64748b"))
                 self.c.drawString(38, y - 7.5, f"Method: {str(method)[:38]}")
 
-            # 3. Result Value
             if is_abnormal:
                 self.c.setFont("Helvetica-Bold", 7.4)
                 self.c.setFillColor(colors.HexColor("#b91c1c"))
@@ -1287,13 +1308,11 @@ class PDFReportManager:
                 self.c.setFillColor(colors.HexColor("#0f172a"))
                 self.c.drawString(290, y - 2, str(val_str)[:24])
 
-            # 4. Unit & Biological Reference Interval
             self.c.setFont("Helvetica", 7.0)
             self.c.setFillColor(colors.HexColor("#0f172a"))
             self.c.drawString(395, y - 2, str(unit)[:10])
             self.c.drawString(455, y - 2, str(ref)[:25])
 
-            # Space padding divider line under the parameter block
             self.c.setStrokeColor(colors.HexColor("#f1f5f9"))
             self.c.line(32, y - 10.5, self.width - 32, y - 10.5)
             y -= row_pitch
