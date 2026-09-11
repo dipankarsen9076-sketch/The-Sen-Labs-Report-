@@ -14,21 +14,58 @@ import json
 import re
 from datetime import datetime
 import os
+import hashlib
 
 st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wide")
 
 # ==============================================================================
-# 🎨 PROFESSIONAL CLINICAL UI STYLING
+# 🔒 1. DEVICE ID HARDWARE LOCK SYSTEM
+# ==============================================================================
+# Jin phones/laptops ko permission deni hai, unki IDs yahan daalein:
+APPROVED_DEVICES = [
+    # Pehli baar kholne par jo ID screen par aayegi, use yahan paste karke save karein
+    # "TSL-DEV-XXXX-YYYY",
+]
+
+def get_device_id():
+    user_agent = st.context.headers.get("User-Agent", "generic_device")
+    platform = st.context.headers.get("Sec-Ch-Ua-Platform", "generic_platform")
+    raw_info = f"{user_agent}_{platform}"
+    short_hash = hashlib.sha256(raw_info.encode()).hexdigest()[:8].upper()
+    return f"TSL-DEV-{short_hash[:4]}-{short_hash[4:]}"
+
+current_device = get_device_id()
+
+if current_device not in APPROVED_DEVICES:
+    st.markdown("""
+    <style>
+        .stApp { background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%) !important; }
+    </style>
+    """, unsafe_allow_html=True)
+    st.error("🚫 Access Denied: Device Not Authorized")
+    st.markdown(f"""
+    ### 🔒 Security Check: Device Activation Required
+    Ye pathology portal protected hai aur sirf authorized clinic devices par chalta hai.
+    
+    **Aapka Unique Device ID:**
+    ```text
+    {current_device}
+    ```
+    
+    👉 Is Device ID ko copy karke **Admin (Dipankar Sen)** ko bhejein aur approval request karein.  
+    Approval add hote hi page ko refresh karein, app chalu ho jayegi.
+    """)
+    st.stop()
+
+# ==============================================================================
+# 🎨 2. CLINICAL UI STYLING
 # ==============================================================================
 st.markdown("""
 <style>
-    /* Main Background */
     .stApp {
         background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%) !important;
         font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
     }
-    
-    /* Top Brand Card Header */
     .brand-header-box {
         background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
         border-radius: 14px;
@@ -49,14 +86,7 @@ st.markdown("""
         color: #bfdbfe;
         margin-top: 4px;
     }
-
-    /* Section Subheadings */
-    h2, h3 {
-        color: #0f172a !important;
-        font-weight: 700 !important;
-    }
-
-    /* Modern Input Boxes with Soft Shadow */
+    h2, h3 { color: #0f172a !important; font-weight: 700 !important; }
     .stTextInput input, .stSelectbox select, .stMultiSelect {
         background-color: #ffffff !important;
         border: 1px solid #cbd5e1 !important;
@@ -70,8 +100,6 @@ st.markdown("""
         border-color: #2563eb !important;
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
     }
-
-    /* Primary Generate Button */
     .stButton button {
         background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%) !important;
         color: #ffffff !important;
@@ -87,18 +115,9 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 6px 14px rgba(37, 99, 235, 0.4) !important;
     }
-
-    /* Archived History Expander */
-    .streamlit-expanderHeader {
-        background-color: #ffffff !important;
-        border-radius: 10px !important;
-        border: 1px solid #cbd5e1 !important;
-        font-weight: 600 !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# Custom Brand Card
 st.markdown("""
 <div class="brand-header-box">
     <div class="brand-title">THE SEN LABS</div>
@@ -107,7 +126,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 📷 1. DEFAULT BACK CAMERA SETUP
+# 📷 3. DEFAULT BACK CAMERA SETUP
 # ==============================================================================
 st.markdown(
     """
@@ -123,7 +142,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# 🔑 2. PERMANENT API KEY & LETTERHEAD MANAGEMENT
+# 🔑 4. PERMANENT API KEY & LETTERHEAD MANAGEMENT
 # ==============================================================================
 KEY_FILE = "api_key.txt"
 LETTERHEAD_FILE = "letterhead.png"
@@ -163,10 +182,9 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🏛️ Lab Letterhead (Header/Footer Pad)")
-    
     has_letterhead = os.path.exists(LETTERHEAD_FILE)
     if has_letterhead:
-        st.success("✅ Custom Letterhead currently active!")
+        st.success("✅ Custom Letterhead active!")
         if st.button("🗑️ Remove / Reset Letterhead"):
             try:
                 os.remove(LETTERHEAD_FILE)
@@ -174,7 +192,7 @@ with st.sidebar:
             except:
                 pass
     else:
-        st.info("ℹ️ Agar aapka apna printed pad/letterhead hai toh use yahan upload karein.")
+        st.info("ℹ️ Agar aapka apna printed pad hai to yahan upload karein.")
 
     lh_upload = st.file_uploader("Upload Letterhead Pad (PNG/JPG)", type=["png", "jpg", "jpeg"], key="lh_pad")
     if lh_upload is not None:
@@ -187,11 +205,12 @@ with st.sidebar:
             st.error(f"Error saving letterhead: {e}")
 
 api_key = st.session_state.saved_api_key
-
 REPORT_DIR = "generated_reports"
 os.makedirs(REPORT_DIR, exist_ok=True)
 
-# 1. Patient Details
+# ==============================================================================
+# 5. PATIENT DETAILS
+# ==============================================================================
 st.subheader("1. Patient & Sample Information")
 c1, c2, c3 = st.columns(3)
 with c1:
@@ -205,7 +224,9 @@ with c3:
     sample_id = st.text_input("Sample ID / Lab No.", value=f"TSL-{datetime.now().strftime('%y%m%d%H%M')}")
     p_contact = "9076816740"
 
-# 2. Multi-Test Profile Selector
+# ==============================================================================
+# 6. INVESTIGATION PROFILES SELECTOR
+# ==============================================================================
 st.subheader("2. Select Test Profiles for Patient")
 selected_profiles = st.multiselect(
     "Select investigations prescribed for this patient:",
@@ -237,7 +258,9 @@ selected_profiles = st.multiselect(
     default=[]
 )
 
-# 3. Layout Preference (INDIVIDUAL vs MIX BUTTONS)
+# ==============================================================================
+# 7. LAYOUT PREFERENCE (INDIVIDUAL vs MIX BUTTONS)
+# ==============================================================================
 st.subheader("3. PDF Layout Preference")
 mode_selection = st.radio(
     "Select Report Printing Style:",
@@ -266,7 +289,7 @@ def compress_image_for_fast_ai(img_file):
 
 final_report_sections = {}
 
-# ----------------- SECTION 1: CBC + GBP WITH MULTI-MODEL FAILOVER -----------------
+# ----------------- SECTION: CBC + GBP -----------------
 if "Complete Blood Count (CBC + GBP)" in selected_profiles:
     st.markdown("---")
     st.subheader("🩸 Complete Blood Count (CBC) with Auto Absolute Calculations")
@@ -285,26 +308,18 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
                 try:
                     client = genai.Client(api_key=api_key)
                     optimized = compress_image_for_fast_ai(cbc_img)
-                    
                     prompt = """
-                    Extract all numerical hematology values from this hematology analyzer screen or printout slip.
+                    Extract numerical hematology values from this analyzer screen or printout slip.
                     Respond ONLY with a valid JSON object matching these exact numeric keys:
                     {"WBC": "", "RBC": "", "HGB": "", "HCT": "", "MCV": "", "MCH": "", "MCHC": "", 
                      "RDWA": "", "RDW_PERCENT": "", "PLT": "", "MPV": "", "PDW": "", "PCT": "", "LPCR": "", 
                      "LYM_PERCENT": "", "LYM_ABSOLUTE": "", "MID_PERCENT": "", "MID_ABSOLUTE": "", "GRAN_PERCENT": "", "GRAN_ABSOLUTE": ""}
                     Do not add explanations or Markdown backticks. Output strictly valid JSON.
                     """
-                    
                     GEMINI_MODELS_CASCADE = [
-                        "gemini-3.6-flash",
-                        "gemini-3.7-flash",
-                        "gemini-3.5-flash",
-                        "gemini-3.5-flash-lite",
-                        "gemini-3.1-pro-preview",
-                        "gemini-1.5-flash",
-                        "gemini-1.5-pro"
+                        "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash",
+                        "gemini-3.5-flash-lite", "gemini-3.1-pro-preview", "gemini-1.5-flash", "gemini-1.5-pro"
                     ]
-                    
                     extracted_json = None
                     active_used_model = None
                     error_logs = []
@@ -313,17 +328,12 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
                         try:
                             resp = client.models.generate_content(
                                 model=m,
-                                contents=[
-                                    types.Part.from_bytes(data=optimized, mime_type="image/jpeg"),
-                                    prompt
-                                ]
+                                contents=[types.Part.from_bytes(data=optimized, mime_type="image/jpeg"), prompt]
                             )
                             cleaned = re.sub(r"^```json\s*|\s*```$", "", resp.text.strip(), flags=re.M).strip()
-                            s_idx = cleaned.find("{")
-                            e_idx = cleaned.rfind("}")
+                            s_idx, e_idx = cleaned.find("{"), cleaned.rfind("}")
                             if s_idx != -1 and e_idx != -1:
                                 cleaned = cleaned[s_idx:e_idx+1]
-                                
                             parsed = json.loads(cleaned)
                             if isinstance(parsed, dict) and len(parsed) > 0:
                                 extracted_json = parsed
@@ -343,20 +353,15 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
 
     cbc_cols = st.columns(4)
     c_raw = st.session_state.cbc_raw_data
-    
     with cbc_cols[0]:
         hgb = st.text_input("Hemoglobin (Hb)", value=str(c_raw.get("HGB", c_raw.get("Hemoglobin", ""))))
         rbc = st.text_input("Total RBC Count", value=str(c_raw.get("RBC", "")))
         hct = st.text_input("Hematocrit (PCV)", value=str(c_raw.get("HCT", c_raw.get("PCV", ""))))
-        
         hgb_f, rbc_f, hct_f = safe_float(hgb), safe_float(rbc), safe_float(hct)
-        calc_mcv = str(c_raw.get("MCV", ""))
-        calc_mch = str(c_raw.get("MCH", ""))
-        calc_mchc = str(c_raw.get("MCHC", ""))
+        calc_mcv, calc_mch, calc_mchc = str(c_raw.get("MCV", "")), str(c_raw.get("MCH", "")), str(c_raw.get("MCHC", ""))
         if not calc_mcv and hct_f and rbc_f and rbc_f > 0: calc_mcv = f"{(hct_f * 10) / rbc_f:.1f}"
         if not calc_mch and hgb_f and rbc_f and rbc_f > 0: calc_mch = f"{(hgb_f * 10) / rbc_f:.1f}"
         if not calc_mchc and hgb_f and hct_f and hct_f > 0: calc_mchc = f"{(hgb_f * 100) / hct_f:.1f}"
-        
         mcv = st.text_input("MCV", value=calc_mcv)
         mch = st.text_input("MCH", value=calc_mch)
         mchc = st.text_input("MCHC", value=calc_mchc)
@@ -366,23 +371,11 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         gran_p = st.text_input("Neutrophils / Gran (%)", value=str(c_raw.get("GRAN_PERCENT", "")))
         lym_p = st.text_input("Lymphocytes (%)", value=str(c_raw.get("LYM_PERCENT", "")))
         mid_p = st.text_input("Monocytes / Mid (%)", value=str(c_raw.get("MID_PERCENT", "")))
-
-        wbc_f = safe_float(wbc)
-        gran_p_f = safe_float(gran_p)
-        lym_p_f = safe_float(lym_p)
-        mid_p_f = safe_float(mid_p)
-
-        calc_gran_abs = str(c_raw.get("GRAN_ABSOLUTE", c_raw.get("GRAN", "")))
-        if not calc_gran_abs and wbc_f and gran_p_f is not None:
-            calc_gran_abs = f"{(wbc_f * gran_p_f) / 100.0:.2f}"
-
-        calc_lym_abs = str(c_raw.get("LYM_ABSOLUTE", c_raw.get("LYM", "")))
-        if not calc_lym_abs and wbc_f and lym_p_f is not None:
-            calc_lym_abs = f"{(wbc_f * lym_p_f) / 100.0:.2f}"
-
-        calc_mid_abs = str(c_raw.get("MID_ABSOLUTE", c_raw.get("MID", "")))
-        if not calc_mid_abs and wbc_f and mid_p_f is not None:
-            calc_mid_abs = f"{(wbc_f * mid_p_f) / 100.0:.2f}"
+        wbc_f, gran_p_f, lym_p_f, mid_p_f = safe_float(wbc), safe_float(gran_p), safe_float(lym_p), safe_float(mid_p)
+        calc_gran_abs, calc_lym_abs, calc_mid_abs = str(c_raw.get("GRAN_ABSOLUTE", c_raw.get("GRAN", ""))), str(c_raw.get("LYM_ABSOLUTE", c_raw.get("LYM", ""))), str(c_raw.get("MID_ABSOLUTE", c_raw.get("MID", "")))
+        if not calc_gran_abs and wbc_f and gran_p_f is not None: calc_gran_abs = f"{(wbc_f * gran_p_f) / 100.0:.2f}"
+        if not calc_lym_abs and wbc_f and lym_p_f is not None: calc_lym_abs = f"{(wbc_f * lym_p_f) / 100.0:.2f}"
+        if not calc_mid_abs and wbc_f and mid_p_f is not None: calc_mid_abs = f"{(wbc_f * mid_p_f) / 100.0:.2f}"
 
     with cbc_cols[2]:
         gran_abs = st.text_input("Absolute Neutrophil Count (#)", value=calc_gran_abs)
@@ -399,7 +392,6 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         rdwa = st.text_input("RDW - SD (RDWa)", value=str(c_raw.get("RDWA", "")))
         rdw_cv = st.text_input("RDW - CV (%)", value=str(c_raw.get("RDW_PERCENT", "")))
 
-    st.markdown("##### 🔬 GBP / Peripheral Smear Findings")
     g_col1, g_col2 = st.columns(2)
     with g_col1:
         gbp_rbc = st.text_input("RBC Morphology", value="Normocytic normochromic red cells with normal central pallor.")
@@ -434,26 +426,22 @@ if "Complete Blood Count (CBC + GBP)" in selected_profiles:
         "gbp": {"rbc": gbp_rbc, "wbc": gbp_wbc, "plt": gbp_plt, "imp": gbp_imp}
     }
 
-# ----------------- SECTION 2: LFT -----------------
+# ----------------- SECTION: LFT -----------------
 if "Liver Function Test (LFT)" in selected_profiles:
     st.markdown("---")
     st.subheader("🧪 Liver Function Test (LFT) - Self Calculating")
     l_c1, l_c2, l_c3 = st.columns(3)
     with l_c1:
-        b_tot = st.text_input("Bilirubin Total (mg/dL)", value="")
-        b_dir = st.text_input("Bilirubin Direct (mg/dL)", value="")
+        b_tot, b_dir = st.text_input("Bilirubin Total (mg/dL)", value=""), st.text_input("Bilirubin Direct (mg/dL)", value="")
         bt_f, bd_f = safe_float(b_tot), safe_float(b_dir)
         b_ind = f"{max(0.0, bt_f - bd_f):.2f}" if (bt_f is not None and bd_f is not None) else ""
         st.info(f"✨ Auto Indirect Bilirubin: {b_ind or '--'} mg/dL")
     with l_c2:
-        sgot = st.text_input("SGOT / AST (U/L)", value="")
-        sgpt = st.text_input("SGPT / ALT (U/L)", value="")
-        alp = st.text_input("Alkaline Phosphatase (ALP) (U/L)", value="")
+        sgot, sgpt, alp = st.text_input("SGOT / AST (U/L)", value=""), st.text_input("SGPT / ALT (U/L)", value=""), st.text_input("Alkaline Phosphatase (ALP) (U/L)", value="")
         sgot_f, sgpt_f = safe_float(sgot), safe_float(sgpt)
         de_ritis = f"{(sgot_f / sgpt_f):.2f}" if (sgot_f and sgpt_f and sgpt_f > 0) else ""
     with l_c3:
-        t_prot = st.text_input("Total Protein (g/dL)", value="")
-        alb = st.text_input("Serum Albumin (g/dL)", value="")
+        t_prot, alb = st.text_input("Total Protein (g/dL)", value=""), st.text_input("Serum Albumin (g/dL)", value="")
         tp_f, alb_f = safe_float(t_prot), safe_float(alb)
         glob = f"{max(0.0, tp_f - alb_f):.2f}" if (tp_f is not None and alb_f is not None) else ""
         glob_f = safe_float(glob)
@@ -474,25 +462,21 @@ if "Liver Function Test (LFT)" in selected_profiles:
         "A : G Ratio": (ag_ratio, "Calculated", "Ratio", "1.2 - 2.2", 1.2, 2.2)
     }
 
-# ----------------- SECTION 3: KFT -----------------
+# ----------------- SECTION: KFT -----------------
 if "Kidney Function Test (KFT / RFT)" in selected_profiles:
     st.markdown("---")
     st.subheader("🫘 Kidney Function Test (KFT / RFT) - Self Calculating")
     k_c1, k_c2, k_c3 = st.columns(3)
     with k_c1:
-        urea = st.text_input("Blood Urea (mg/dL)", value="")
-        creat = st.text_input("Serum Creatinine (mg/dL)", value="")
+        urea, creat = st.text_input("Blood Urea (mg/dL)", value=""), st.text_input("Serum Creatinine (mg/dL)", value="")
         u_f, cr_f = safe_float(urea), safe_float(creat)
         bun = f"{(u_f / 2.14):.2f}" if u_f is not None else ""
         u_cr_ratio = f"{(u_f / cr_f):.1f}" if (u_f and cr_f and cr_f > 0) else ""
         st.info(f"✨ Auto BUN: {bun or '--'} | Urea/Creat Ratio: {u_cr_ratio or '--'}")
     with k_c2:
-        uric = st.text_input("Serum Uric Acid (mg/dL)", value="")
-        calcium = st.text_input("Serum Calcium (mg/dL)", value="")
+        uric, calcium = st.text_input("Serum Uric Acid (mg/dL)", value=""), st.text_input("Serum Calcium (mg/dL)", value="")
     with k_c3:
-        sod = st.text_input("Serum Sodium (Na+) (mEq/L)", value="")
-        pot = st.text_input("Serum Potassium (K+) (mEq/L)", value="")
-        chlor = st.text_input("Serum Chloride (Cl-) (mEq/L)", value="")
+        sod, pot, chlor = st.text_input("Serum Sodium (Na+) (mEq/L)", value=""), st.text_input("Serum Potassium (K+) (mEq/L)", value=""), st.text_input("Serum Chloride (Cl-) (mEq/L)", value="")
 
     final_report_sections["KFT"] = {
         "Blood Urea": (urea, "GLDH Urease Kinetic", "mg/dL", "15.0 - 45.0", 15.0, 45.0),
@@ -506,15 +490,13 @@ if "Kidney Function Test (KFT / RFT)" in selected_profiles:
         "Serum Chloride (Cl-)": (chlor, "ISE Direct", "mEq/L", "96 - 106", 96.0, 106.0)
     }
 
-# ----------------- SECTION 4: LIPID PROFILE -----------------
+# ----------------- SECTION: LIPID PROFILE -----------------
 if "Lipid Profile" in selected_profiles:
     st.markdown("---")
-    st.subheader("❤️ Lipid Profile - Self Calculating (Friedewald Equation)")
+    st.subheader("❤️ Lipid Profile - Self Calculating")
     lp_c1, lp_c2 = st.columns(2)
     with lp_c1:
-        chol = st.text_input("Total Cholesterol (mg/dL)", value="")
-        trig = st.text_input("Serum Triglycerides (mg/dL)", value="")
-        hdl = st.text_input("HDL Cholesterol (Good) (mg/dL)", value="")
+        chol, trig, hdl = st.text_input("Total Cholesterol (mg/dL)", value=""), st.text_input("Serum Triglycerides (mg/dL)", value=""), st.text_input("HDL Cholesterol (Good) (mg/dL)", value="")
     with lp_c2:
         ch_f, tr_f, hd_f = safe_float(chol), safe_float(trig), safe_float(hdl)
         vldl = f"{(tr_f / 5.0):.1f}" if tr_f is not None else ""
@@ -534,18 +516,12 @@ if "Lipid Profile" in selected_profiles:
         "Total Chol / HDL Ratio": (tc_hdl, "Calculated", "Ratio", "3.0 - 5.0", 3.0, 5.0)
     }
 
-# ----------------- DENGUE (INDIVIDUAL & COMPLETE) -----------------
+# ----------------- DENGUE & VIRAL MARKERS -----------------
 if "Dengue NS1 Antigen (Single)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🦟 Dengue NS1 Antigen Test")
     dns1_s = st.selectbox("Dengue NS1 Antigen", ["Negative", "Positive"], key="d_ns1_single")
-    final_report_sections["DENGUE_NS1"] = {
-        "Dengue NS1 Antigen": (dns1_s, "Immunochromatography", "Qualitative", "Negative", None, None)
-    }
+    final_report_sections["DENGUE_NS1"] = {"Dengue NS1 Antigen": (dns1_s, "Immunochromatography", "Qualitative", "Negative", None, None)}
 
 if "Dengue Profile Complete (NS1 + IgM + IgG)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🦟 Dengue Complete Profile")
     d1, d2, d3 = st.columns(3)
     with d1: dns1_c = st.selectbox("Dengue NS1 Antigen", ["Negative", "Positive"], key="d_ns1_c")
     with d2: digm_c = st.selectbox("Dengue IgM Antibody", ["Negative", "Positive"], key="d_igm_c")
@@ -556,10 +532,7 @@ if "Dengue Profile Complete (NS1 + IgM + IgG)" in selected_profiles:
         "Dengue IgG Antibody": (digg_c, "Immunochromatography", "Qualitative", "Negative", None, None)
     }
 
-# ----------------- VIRAL MARKERS (INDIVIDUAL & COMPLETE) -----------------
 if "Viral Markers Complete (HIV + HBsAg + HCV + VDRL)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🛡️ Complete Viral Markers Battery (4-in-1)")
     v1, v2, v3, v4 = st.columns(4)
     with v1: v_hiv = st.selectbox("HIV 1 & 2 Antibody", ["Non-Reactive", "Reactive"], key="vm_hiv_c")
     with v2: v_hbs = st.selectbox("HBsAg (Hepatitis B)", ["Non-Reactive", "Reactive"], key="vm_hbs_c")
@@ -573,98 +546,43 @@ if "Viral Markers Complete (HIV + HBsAg + HCV + VDRL)" in selected_profiles:
     }
 
 if "HIV 1 & 2 Antibody (Single)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🛡️ HIV 1 & 2 Antibody Screening")
     s_hiv = st.selectbox("HIV 1 & 2 Antibody", ["Non-Reactive", "Reactive"], key="s_hiv_val")
-    final_report_sections["HIV_SINGLE"] = {
-        "HIV 1 & 2 Antibodies": (s_hiv, "4th Gen Immunochromatography", "Screening", "Non-Reactive", None, None)
-    }
+    final_report_sections["HIV_SINGLE"] = {"HIV 1 & 2 Antibodies": (s_hiv, "4th Gen Immunochromatography", "Screening", "Non-Reactive", None, None)}
 
 if "HBsAg Hepatitis B (Single)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🛡️ Hepatitis B Surface Antigen (HBsAg)")
     s_hbs = st.selectbox("HBsAg Result", ["Non-Reactive", "Reactive"], key="s_hbs_val")
-    final_report_sections["HBSAG_SINGLE"] = {
-        "HBsAg (Hepatitis B Surface Antigen)": (s_hbs, "Immunochromatography", "Screening", "Non-Reactive", None, None)
-    }
+    final_report_sections["HBSAG_SINGLE"] = {"HBsAg (Hepatitis B Surface Antigen)": (s_hbs, "Immunochromatography", "Screening", "Non-Reactive", None, None)}
 
 if "HCV Antibody Hepatitis C (Single)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🛡️ Hepatitis C Virus (HCV) Antibody")
     s_hcv = st.selectbox("HCV Antibody Result", ["Non-Reactive", "Reactive"], key="s_hcv_val")
-    final_report_sections["HCV_SINGLE"] = {
-        "HCV Antibody (Hepatitis C)": (s_hcv, "Immunochromatography", "Screening", "Non-Reactive", None, None)
-    }
+    final_report_sections["HCV_SINGLE"] = {"HCV Antibody (Hepatitis C)": (s_hcv, "Immunochromatography", "Screening", "Non-Reactive", None, None)}
 
 if "VDRL / RPR Syphilis (Single)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🛡️ VDRL / RPR Serological Test for Syphilis")
     s_vdrl = st.selectbox("VDRL / RPR Result", ["Non-Reactive", "Reactive (1:8)", "Reactive (1:16)"], key="s_vdrl_val")
-    final_report_sections["VDRL_SINGLE"] = {
-        "VDRL / RPR (Syphilis Screen)": (s_vdrl, "Flocculation / Card", "Qualitative", "Non-Reactive", None, None)
-    }
+    final_report_sections["VDRL_SINGLE"] = {"VDRL / RPR (Syphilis Screen)": (s_vdrl, "Flocculation / Card", "Qualitative", "Non-Reactive", None, None)}
 
-# ----------------- INFLAMMATORY & RHEUMATOLOGY (CRP & RA) -----------------
+# ----------------- INFLAMMATORY & INDIVIDUAL ANALYTES -----------------
 if "C-Reactive Protein (CRP)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🔬 C-Reactive Protein (CRP)")
-    c_m1, c_m2 = st.columns(2)
-    with c_m1: crp_mode = st.radio("CRP Value Mode:", ["Semi-Quantitative (mg/L)", "Qualitative Latex"], horizontal=True, key="crp_mode")
-    with c_m2:
-        if "Semi-Quantitative" in crp_mode:
-            crp_input = st.text_input("CRP Result (mg/L)", value="< 6.0", key="crp_in")
-        else:
-            crp_input = st.selectbox("CRP Result", ["Negative (< 6.0 mg/L)", "Positive (>= 6.0 mg/L)"], key="crp_sel")
-    final_report_sections["CRP_SINGLE"] = {
-        "C-Reactive Protein (CRP)": (crp_input, "Latex Agglutination / Turbidimetry", "mg/L", "< 6.0 (Negative)", 0.0, 6.0)
-    }
+    crp_input = st.text_input("CRP Result (mg/L)", value="< 6.0", key="crp_in")
+    final_report_sections["CRP_SINGLE"] = {"C-Reactive Protein (CRP)": (crp_input, "Latex Agglutination / Turbidimetry", "mg/L", "< 6.0 (Negative)", 0.0, 6.0)}
 
 if "Rheumatoid Factor (RA / RF)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🔬 Rheumatoid Factor (RA / RF)")
-    ra_m1, ra_m2 = st.columns(2)
-    with ra_m1: ra_mode = st.radio("RA Factor Value Mode:", ["Semi-Quantitative (IU/mL)", "Qualitative Latex"], horizontal=True, key="ra_mode")
-    with ra_m2:
-        if "Semi-Quantitative" in ra_mode:
-            ra_input = st.text_input("RA Factor Result (IU/mL)", value="< 8.0", key="ra_in")
-        else:
-            ra_input = st.selectbox("RA Factor Result", ["Negative (< 8.0 IU/mL)", "Positive (>= 8.0 IU/mL)"], key="ra_sel")
-    final_report_sections["RA_SINGLE"] = {
-        "Rheumatoid Factor (RA / RF)": (ra_input, "Latex Agglutination / Turbidimetry", "IU/mL", "< 8.0 (Negative)", 0.0, 8.0)
-    }
+    ra_input = st.text_input("RA Factor Result (IU/mL)", value="< 8.0", key="ra_in")
+    final_report_sections["RA_SINGLE"] = {"Rheumatoid Factor (RA / RF)": (ra_input, "Latex Agglutination / Turbidimetry", "IU/mL", "< 8.0 (Negative)", 0.0, 8.0)}
 
-# ----------------- INDIVIDUAL BIOCHEMISTRY ANALYTES -----------------
 if "Serum Creatinine (Single)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🧪 Serum Creatinine")
     s_cr = st.text_input("Serum Creatinine Value (mg/dL)", value="", key="s_cr_val")
-    if s_cr:
-        final_report_sections["CREATININE_SINGLE"] = {
-            "Serum Creatinine": (s_cr, "Modified Jaffe's Method", "mg/dL", "0.6 - 1.4", 0.6, 1.4)
-        }
+    if s_cr: final_report_sections["CREATININE_SINGLE"] = {"Serum Creatinine": (s_cr, "Modified Jaffe's Method", "mg/dL", "0.6 - 1.4", 0.6, 1.4)}
 
 if "Serum Uric Acid (Single)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🧪 Serum Uric Acid")
     s_ua = st.text_input("Serum Uric Acid Value (mg/dL)", value="", key="s_ua_val")
-    if s_ua:
-        final_report_sections["URIC_ACID_SINGLE"] = {
-            "Serum Uric Acid": (s_ua, "Uricase / POD Method", "mg/dL", "3.5 - 7.2", 3.5, 7.2)
-        }
+    if s_ua: final_report_sections["URIC_ACID_SINGLE"] = {"Serum Uric Acid": (s_ua, "Uricase / POD Method", "mg/dL", "3.5 - 7.2", 3.5, 7.2)}
 
 if "Serum Total Calcium (Single)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🧪 Serum Total Calcium")
     s_ca = st.text_input("Serum Total Calcium Value (mg/dL)", value="", key="s_ca_val")
-    if s_ca:
-        final_report_sections["CALCIUM_SINGLE"] = {
-            "Serum Total Calcium": (s_ca, "Arsenazo III Method", "mg/dL", "8.5 - 10.5", 8.5, 10.5)
-        }
+    if s_ca: final_report_sections["CALCIUM_SINGLE"] = {"Serum Total Calcium": (s_ca, "Arsenazo III Method", "mg/dL", "8.5 - 10.5", 8.5, 10.5)}
 
-# ----------------- IMMUNOHEMATOLOGY & PREGNANCY -----------------
 if "Blood Group & Rh Type" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🩸 ABO Blood Group & Rh Factor")
     bg_c1, bg_c2 = st.columns(2)
     with bg_c1: abo = st.selectbox("ABO Blood Group", ["'A'", "'B'", "'AB'", "'O'"], index=1)
     with bg_c2: rh = st.selectbox("Rh (D) Factor", ["Positive (+ve)", "Negative (-ve)"], index=0)
@@ -674,33 +592,24 @@ if "Blood Group & Rh Type" in selected_profiles:
     }
 
 if "Urine Pregnancy Test (UPT)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🤰 Urine Pregnancy Test (UPT)")
     upt_res = st.selectbox("Urine hCG Card Test", ["Negative (Not Pregnant)", "Positive (Pregnant)", "Inconclusive / Repeat"], index=0)
-    final_report_sections["UPT"] = {
-        "Urine hCG (Pregnancy Card)": (upt_res, "Immunochromatography (hCG)", "Card", "Negative", None, None)
-    }
+    final_report_sections["UPT"] = {"Urine hCG (Pregnancy Card)": (upt_res, "Immunochromatography (hCG)", "Card", "Negative", None, None)}
 
-# ----------------- URINE ROUTINE & MICROSCOPIC (URINE R/M) -----------------
+# ----------------- URINE R/M -----------------
 if "Urine Routine & Microscopic Examination (Urine R/M)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🧪 Urine Routine & Microscopic Examination (Urine R/M)")
     ur_c1, ur_c2, ur_c3 = st.columns(3)
     with ur_c1:
-        st.markdown("**Physical Examination**")
         u_col = st.selectbox("Color", ["Pale Yellow", "Straw", "Deep Amber", "Turbid / Reddish"], index=0)
         u_app = st.selectbox("Appearance", ["Clear", "Slightly Hazy", "Turbid"], index=0)
         u_spg = st.text_input("Specific Gravity", value="1.020")
         u_ph = st.text_input("pH Reaction", value="6.5")
     with ur_c2:
-        st.markdown("**Chemical Examination**")
         u_alb = st.selectbox("Albumin / Protein", ["Nil", "Trace", "+ (30 mg/dL)", "++ (100 mg/dL)", "+++ (300 mg/dL)"], index=0)
         u_sug = st.selectbox("Sugar / Glucose", ["Nil", "Trace", "+ (0.5%)", "++ (1.0%)", "+++ (2.0%)"], index=0)
         u_ket = st.selectbox("Ketone Bodies", ["Negative", "Trace", "Positive"], index=0)
         u_bld = st.selectbox("Occult Blood", ["Negative", "Positive"], index=0)
         u_uro = st.selectbox("Urobilinogen", ["Normal", "Increased"], index=0)
     with ur_c3:
-        st.markdown("**Microscopic Examination**")
         u_pus = st.text_input("Pus Cells (WBCs)", value="2 - 4 / HPF")
         u_epi = st.text_input("Epithelial Cells", value="1 - 3 / HPF")
         u_rbc = st.text_input("Red Blood Cells (RBCs)", value="Nil / HPF")
@@ -728,8 +637,6 @@ if "Urine Routine & Microscopic Examination (Urine R/M)" in selected_profiles:
 
 # ----------------- WIDAL, TYPHIDOT, MALARIA, GLUCOSE -----------------
 if "Widal Agglutination Test" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🌡️ Widal Agglutination Slide / Tube Test")
     w1, w2, w3, w4 = st.columns(4)
     with w1: wo = st.selectbox("S. typhi 'O'", ["Negative", "1:20", "1:40", "1:80", "1:160", "1:320"], key="w_o")
     with w2: wh = st.selectbox("S. typhi 'H'", ["Negative", "1:20", "1:40", "1:80", "1:160", "1:320"], key="w_h")
@@ -743,8 +650,6 @@ if "Widal Agglutination Test" in selected_profiles:
     }
 
 if "Typhidot (IgM / IgG)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🧪 Typhidot Rapid Card Test")
     t1, t2 = st.columns(2)
     with t1: ty_m = st.selectbox("Typhidot IgM (Acute Phase)", ["Non-Reactive (Negative)", "Reactive (Positive)"], key="ty_m")
     with t2: ty_g = st.selectbox("Typhidot IgG (Convalescent/Carrier)", ["Non-Reactive (Negative)", "Reactive (Positive)"], key="ty_g")
@@ -754,8 +659,6 @@ if "Typhidot (IgM / IgG)" in selected_profiles:
     }
 
 if "Malaria Card & Smear (MP)" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🦟 Malaria Diagnostic Profile")
     m1, m2, m3 = st.columns(3)
     with m1: mp_smear = st.selectbox("Peripheral Smear for MP", ["Not Seen", "P. vivax trophozoites seen", "P. falciparum ring forms seen"], key="mp_smear")
     with m2: mp_pv = st.selectbox("P. vivax Antigen (Rapid)", ["Negative", "Positive"], key="mp_pv")
@@ -767,8 +670,6 @@ if "Malaria Card & Smear (MP)" in selected_profiles:
     }
 
 if "Blood Glucose" in selected_profiles:
-    st.markdown("---")
-    st.subheader("🍬 Blood Glucose Profile")
     g1, g2, g3 = st.columns(3)
     with g1: glu_f = st.text_input("Fasting Blood Sugar (FBS)", value="", key="glu_f")
     with g2: glu_pp = st.text_input("Post Prandial Blood Sugar (PPBS)", value="", key="glu_pp")
@@ -777,8 +678,7 @@ if "Blood Glucose" in selected_profiles:
     if glu_f: glu_dict["Blood Glucose (Fasting)"] = (glu_f, "GOD - POD Method", "mg/dL", "70.0 - 100.0", 70.0, 100.0)
     if glu_pp: glu_dict["Blood Glucose (PP)"] = (glu_pp, "GOD - POD Method", "mg/dL", "70.0 - 140.0", 70.0, 140.0)
     if glu_r: glu_dict["Blood Glucose (Random)"] = (glu_r, "GOD - POD Method", "mg/dL", "70.0 - 140.0", 70.0, 140.0)
-    if glu_dict:
-        final_report_sections["GLUCOSE"] = glu_dict
+    if glu_dict: final_report_sections["GLUCOSE"] = glu_dict
 
 # ----------------- KNOWLEDGE BASE -----------------
 KNOWLEDGE_BASE = {
@@ -928,7 +828,9 @@ KNOWLEDGE_BASE = {
     }
 }
 
-# ----------------- SAFE MULTI-PAGE REPORT MANAGER CLASS -----------------
+# ==============================================================================
+# 8. SAFE MULTI-PAGE REPORT MANAGER CLASS
+# ==============================================================================
 class PDFReportManager:
     def __init__(self, buffer, p_dict, separate_pages_mode=True):
         self.c = canvas.Canvas(buffer, pagesize=letter)
@@ -943,7 +845,6 @@ class PDFReportManager:
         self.draw_header()
 
     def draw_header(self):
-        # Check if custom letterhead exists
         if os.path.exists(LETTERHEAD_FILE):
             try:
                 reader = ImageReader(LETTERHEAD_FILE)
@@ -951,44 +852,20 @@ class PDFReportManager:
             except Exception:
                 pass
         else:
-            # Fallback default header if no custom letterhead uploaded
             self.c.setFillColor(colors.HexColor("#1e3a8a"))
             self.c.rect(0, self.height - 62, self.width, 62, fill=True, stroke=False)
-            
-            possible_paths = [
-                "logo.png",
-                "logo.png.png",
-                os.path.join(os.path.dirname(__file__), "logo.png"),
-                os.path.join(os.path.dirname(__file__), "logo.png.png"),
-                "/mount/src/the-sen-labs-reporting/logo.png",
-                "/mount/src/the-sen-labs-reporting/logo.png.png"
-            ]
-            
-            found_logo = None
-            for p in possible_paths:
-                if os.path.exists(p):
-                    found_logo = p
-                    break
-
+            possible_paths = ["logo.png", "logo.png.png"]
+            found_logo = next((p for p in possible_paths if os.path.exists(p)), None)
             text_x_pos = 32
             if found_logo:
                 try:
                     orig_img = Image.open(found_logo).convert("RGBA")
                     datas = orig_img.getdata()
-                    
-                    new_data = []
-                    for item in datas:
-                        if item[0] < 50 and item[1] < 50 and item[2] < 50:
-                            new_data.append((255, 255, 255, 0))
-                        else:
-                            new_data.append((255, 255, 255, 255))
-                            
+                    new_data = [(255, 255, 255, 0) if item[0] < 50 and item[1] < 50 and item[2] < 50 else (255, 255, 255, 255) for item in datas]
                     orig_img.putdata(new_data)
-                    
                     img_stream = io.BytesIO()
                     orig_img.save(img_stream, format="PNG")
                     img_stream.seek(0)
-                    
                     reader = ImageReader(img_stream)
                     self.c.drawImage(reader, 32, self.height - 52, width=44, height=44, preserveAspectRatio=True, mask='auto')
                     text_x_pos = 84
@@ -1001,7 +878,7 @@ class PDFReportManager:
             self.c.setFont("Helvetica", 7.5)
             self.c.drawString(text_x_pos, self.height - 44, "ADVANCED PATHOLOGY & CLINICAL BIOCHEMISTRY | AUTOMATED DIAGNOSTICS")
             self.c.drawRightString(self.width - 32, self.height - 34, f"Helpdesk: +91 {self.p['contact']}")
-        
+
         # Patient Info Box (WITH PATIENT MOBILE NUMBER)
         self.c.setFillColor(colors.HexColor("#f8fafc"))
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
@@ -1031,11 +908,9 @@ class PDFReportManager:
         self.c.drawString(405, self.height - 104, self.report_dt_str)
 
     def draw_footer(self):
-        # 1. Horizontal Divider Line
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
         self.c.line(32, 54, self.width - 32, 54)
         
-        # 2. Left: Lab Technologist Signature
         self.c.setFont("Helvetica-Bold", 7.5)
         self.c.setFillColor(colors.HexColor("#0f172a"))
         self.c.drawString(42, 42, "Dipankar Sen")
@@ -1044,7 +919,6 @@ class PDFReportManager:
         self.c.drawString(42, 32, "Medical Lab Technologist (DMLT / BSS)")
         self.c.drawString(42, 22, "Verified & Digitally Processed")
 
-        # 3. Right: Consultant Pathologist Signature & Page Count
         self.c.setFont("Helvetica-Bold", 7.5)
         self.c.setFillColor(colors.HexColor("#0f172a"))
         self.c.drawString(self.width - 190, 42, "Dr. R. K. Banerjee")
@@ -1053,7 +927,7 @@ class PDFReportManager:
         self.c.drawString(self.width - 190, 32, "Consultant Pathologist (MD Path)")
         self.c.drawRightString(self.width - 42, 22, f"Page {self.page_number}")
 
-        # 4. PURE SIMPLE QR CODE IN MARKED RED AREA (ZERO TEXT AROUND IT)
+        # PURE SIMPLE QR CODE IN THE MARKED RED AREA (ZERO TEXT AROUND IT)
         try:
             qr_content = (
                 f"Patient Name: Mr./Ms. {self.p['name']}\n"
@@ -1062,15 +936,11 @@ class PDFReportManager:
             )
             qr_widget = QrCodeWidget(qr_content)
             bounds = qr_widget.getBounds()
-            w = bounds[2] - bounds[0]
-            h = bounds[3] - bounds[1]
+            w, h = bounds[2] - bounds[0], bounds[3] - bounds[1]
             qr_dimension = 66
             d = Drawing(qr_dimension, qr_dimension, transform=[qr_dimension / w, 0, 0, qr_dimension / h, 0, 0])
             d.add(qr_widget)
-            
-            qr_x = (self.width - qr_dimension) / 2
-            qr_y = 66
-            renderPDF.draw(d, self.c, qr_x, qr_y)
+            renderPDF.draw(d, self.c, (self.width - qr_dimension) / 2, 66)
         except Exception:
             pass
 
@@ -1085,7 +955,6 @@ class PDFReportManager:
         self.c.setFont("Helvetica-Bold", 6.2)
         self.c.setFillColor(colors.HexColor("#0f172a"))
         self.c.drawString(42, start_y, prefix)
-        
         p_w = self.c.stringWidth(prefix, "Helvetica-Bold", 6.2) + 4
         self.c.setFont("Helvetica", 6.0)
         self.c.setFillColor(colors.HexColor("#334155"))
@@ -1094,7 +963,6 @@ class PDFReportManager:
         line = ""
         y = start_y
         first_line = True
-        
         for word in words:
             test_line = line + (" " if line else "") + word
             limit = (max_width - p_w) if first_line else max_width
@@ -1108,18 +976,14 @@ class PDFReportManager:
         if line:
             self.c.drawString(42 + (p_w if first_line else 0), y, line)
             y -= 8.2
-            
         return y
 
     def print_knowledge_box(self, section_key):
-        if section_key not in KNOWLEDGE_BASE:
-            return
-            
+        if section_key not in KNOWLEDGE_BASE: return
         kb = KNOWLEDGE_BASE[section_key]
         box_top = self.curr_y - 4
         box_height = box_top - 146
-        if box_height < 45:
-            return
+        if box_height < 45: return
 
         self.c.setFillColor(colors.HexColor("#f8fafc"))
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
@@ -1134,30 +998,23 @@ class PDFReportManager:
         y = box_top - 18
         y = self.print_wrapped_text("Clinical Significance: ", kb["significance"], y)
         y -= 1.5
-        
         if y > 185:
             y = self.print_wrapped_text("High Findings (Elevated): ", kb["elevated"], y)
             y -= 1.5
-            
         if y > 170:
             y = self.print_wrapped_text("Low Findings (Decreased): ", kb["decreased"], y)
             y -= 1.5
-            
         if y > 155:
             y = self.print_wrapped_text("Recommended Action: ", kb["guidance"], y)
             y -= 1.5
-            
         if y > 148:
             self.c.setFont("Helvetica-Oblique", 5.6)
             self.c.setFillColor(colors.HexColor("#64748b"))
             self.c.drawString(42, y, kb["notes"][:140])
-
         self.curr_y = 144
 
-    # CBC + GBP: METHOD DIRECTLY UNDER PARAMETER NAME WITH PROPER SPACING
     def print_cbc_and_gbp_together(self, cbc_items, gbp_data):
         active_rows = {k: v for k, v in cbc_items.items() if str(v[0]).strip() != ""}
-        
         self.c.setFillColor(colors.HexColor("#0f766e"))
         self.c.rect(32, self.curr_y - 12, self.width - 64, 12, fill=True, stroke=False)
         self.c.setFillColor(colors.white)
@@ -1241,20 +1098,16 @@ class PDFReportManager:
         self.curr_y = box_top - 42
         self.print_knowledge_box("CBC")
 
-    # GENERAL SECTION RENDERER
     def print_section(self, kb_key, title, data_dict, bar_hex, is_first_on_page=False):
         active_rows = {k: v for k, v in data_dict.items() if str(v[0]).strip() != ""}
-        if not active_rows:
-            return
-
+        if not active_rows: return
         row_pitch = 18.0
 
         if self.separate_pages_mode and not is_first_on_page:
             self.new_page()
         else:
             needed = 42 + (len(active_rows) * row_pitch)
-            if self.curr_y - needed < 140:
-                self.new_page()
+            if self.curr_y - needed < 140: self.new_page()
 
         self.c.setFillColor(colors.HexColor(bar_hex))
         self.c.rect(32, self.curr_y - 12, self.width - 64, 12, fill=True, stroke=False)
@@ -1318,7 +1171,6 @@ class PDFReportManager:
             y -= row_pitch
 
         self.curr_y = y - 6
-
         if self.separate_pages_mode and kb_key:
             self.print_knowledge_box(kb_key)
 
@@ -1326,7 +1178,9 @@ class PDFReportManager:
         self.draw_footer()
         self.c.save()
 
-# ----------------- REPORT ACTION -----------------
+# ==============================================================================
+# 9. REPORT GENERATION ACTION
+# ==============================================================================
 st.markdown("---")
 if not selected_profiles:
     st.info("👆 Kripya Section 2 me se kam se kam ek test profile select karein.")
@@ -1339,34 +1193,29 @@ else:
             "sex": p_sex,
             "phone": p_phone or "--",
             "doctor": p_doctor or "Self",
-            "contact": p_contact or "9076816740",
+            "contact": p_contact,
             "sample_id": sample_id
         }
         
         doc = PDFReportManager(buf, p_info, separate_pages_mode=separate_pages)
         first_section = True
         
-        # 1. CBC
         if "CBC" in final_report_sections:
             doc.print_cbc_and_gbp_together(final_report_sections["CBC"]["items"], final_report_sections["CBC"]["gbp"])
             first_section = False
             
-        # 2. LFT
         if "LFT" in final_report_sections:
             doc.print_section("LFT", "CLINICAL BIOCHEMISTRY - LIVER FUNCTION TEST (LFT)", final_report_sections["LFT"], "#854d0e", is_first_on_page=first_section)
             first_section = False
             
-        # 3. KFT
         if "KFT" in final_report_sections:
             doc.print_section("KFT", "CLINICAL BIOCHEMISTRY - KIDNEY FUNCTION TEST (KFT)", final_report_sections["KFT"], "#7c2d12", is_first_on_page=first_section)
             first_section = False
             
-        # 4. LIPID
         if "LIPID" in final_report_sections:
             doc.print_section("LIPID", "CLINICAL BIOCHEMISTRY - LIPID PROFILE", final_report_sections["LIPID"], "#be123c", is_first_on_page=first_section)
             first_section = False
 
-        # 5. DENGUE
         if "DENGUE_PROFILE" in final_report_sections:
             doc.print_section("DENGUE", "SEROLOGY - DENGUE COMPLETE PROFILE (NS1 + IgM + IgG)", final_report_sections["DENGUE_PROFILE"], "#b45309", is_first_on_page=first_section)
             first_section = False
@@ -1374,7 +1223,6 @@ else:
             doc.print_section("DENGUE", "SEROLOGY - DENGUE NS1 ANTIGEN RAPID TEST", final_report_sections["DENGUE_NS1"], "#b45309", is_first_on_page=first_section)
             first_section = False
 
-        # 6. VIRAL MARKERS
         if "VIRAL_PROFILE" in final_report_sections:
             doc.print_section("VIRAL", "IMMUNOLOGY & SEROLOGY - VIRAL MARKERS SCREENING (4-IN-1)", final_report_sections["VIRAL_PROFILE"], "#991b1b", is_first_on_page=first_section)
             first_section = False
@@ -1391,7 +1239,6 @@ else:
             doc.print_section("VIRAL", "SEROLOGY - VDRL / RPR TEST FOR SYPHILIS", final_report_sections["VDRL_SINGLE"], "#991b1b", is_first_on_page=first_section)
             first_section = False
 
-        # 7. INFLAMMATORY
         if "CRP_SINGLE" in final_report_sections:
             doc.print_section("CRP", "CLINICAL BIOCHEMISTRY - C-REACTIVE PROTEIN (CRP)", final_report_sections["CRP_SINGLE"], "#0369a1", is_first_on_page=first_section)
             first_section = False
@@ -1399,7 +1246,6 @@ else:
             doc.print_section("RA", "SEROLOGY & IMMUNOLOGY - RHEUMATOID FACTOR (RA / RF)", final_report_sections["RA_SINGLE"], "#0369a1", is_first_on_page=first_section)
             first_section = False
 
-        # 8. INDIVIDUAL BIOCHEMISTRY
         if "CREATININE_SINGLE" in final_report_sections:
             doc.print_section("CREATININE", "CLINICAL BIOCHEMISTRY - SERUM CREATININE", final_report_sections["CREATININE_SINGLE"], "#047857", is_first_on_page=first_section)
             first_section = False
@@ -1410,7 +1256,6 @@ else:
             doc.print_section("CALCIUM", "CLINICAL BIOCHEMISTRY - SERUM TOTAL CALCIUM", final_report_sections["CALCIUM_SINGLE"], "#047857", is_first_on_page=first_section)
             first_section = False
 
-        # 9. BLOOD GROUP & UPT
         if "BLOODGROUP" in final_report_sections:
             doc.print_section("BLOODGROUP", "IMMUNOHEMATOLOGY - BLOOD GROUP & RH FACTOR", final_report_sections["BLOODGROUP"], "#9f1239", is_first_on_page=first_section)
             first_section = False
@@ -1418,12 +1263,10 @@ else:
             doc.print_section("UPT", "RAPID SEROLOGY - URINE PREGNANCY TEST (UPT)", final_report_sections["UPT"], "#a21caf", is_first_on_page=first_section)
             first_section = False
 
-        # 10. URINE R/M
         if "URINE_RM" in final_report_sections:
             doc.print_section("URINE_RM", "CLINICAL PATHOLOGY - URINE ROUTINE & MICROSCOPY", final_report_sections["URINE_RM"], "#ca8a04", is_first_on_page=first_section)
             first_section = False
 
-        # 11. WIDAL, TYPHIDOT, MALARIA, GLUCOSE
         if "WIDAL" in final_report_sections:
             doc.print_section("WIDAL", "SEROLOGY - WIDAL AGGLUTINATION PROFILE", final_report_sections["WIDAL"], "#4338ca", is_first_on_page=first_section)
             first_section = False
@@ -1439,14 +1282,11 @@ else:
             
         doc.finish()
         pdf_bytes = buf.getvalue()
-
         filename = f"{sample_id}_{p_name or 'Patient'}.pdf".replace(" ", "_")
         filepath = os.path.join(REPORT_DIR, filename)
-        with open(filepath, "wb") as f:
-            f.write(pdf_bytes)
+        with open(filepath, "wb") as f: f.write(pdf_bytes)
             
         st.success(f"Report '{filename}' generated and archived successfully!")
-
         st.download_button(
             label="📥 Download Clinical Diagnostic Report (PDF)",
             data=pdf_bytes,
@@ -1455,16 +1295,11 @@ else:
         )
 
 # ==============================================================================
-# 📁 SAVED & ARCHIVED REPORTS VIEWER
+# 10. SAVED REPORTS VIEWER
 # ==============================================================================
 st.markdown("---")
-with st.expander("📁 Generated & Saved Reports History (Purani Reports Yahan Dekhein)", expanded=False):
-    saved_files = sorted(
-        [f for f in os.listdir(REPORT_DIR) if f.endswith(".pdf")],
-        key=lambda x: os.path.getmtime(os.path.join(REPORT_DIR, x)),
-        reverse=True
-    )
-    
+with st.expander("📁 Generated & Saved Reports History", expanded=False):
+    saved_files = sorted([f for f in os.listdir(REPORT_DIR) if f.endswith(".pdf")], key=lambda x: os.path.getmtime(os.path.join(REPORT_DIR, x)), reverse=True)
     if not saved_files:
         st.info("Abhi tak koi report save nahi hui hai.")
     else:
@@ -1472,19 +1307,11 @@ with st.expander("📁 Generated & Saved Reports History (Purani Reports Yahan D
         for report_name in saved_files:
             r_path = os.path.join(REPORT_DIR, report_name)
             file_time = datetime.fromtimestamp(os.path.getmtime(r_path)).strftime("%d-%b-%Y %I:%M %p")
-            
             c_info, c_down, c_del = st.columns([3, 1, 1])
-            with c_info:
-                st.markdown(f"📄 **{report_name}**  \n*Created: {file_time}*")
+            with c_info: st.markdown(f"📄 **{report_name}**  \n*Created: {file_time}*")
             with c_down:
                 with open(r_path, "rb") as rf:
-                    st.download_button(
-                        label="⬇️ Download",
-                        data=rf.read(),
-                        file_name=report_name,
-                        mime="application/pdf",
-                        key=f"dl_{report_name}"
-                    )
+                    st.download_button(label="⬇️ Download", data=rf.read(), file_name=report_name, mime="application/pdf", key=f"dl_{report_name}")
             with c_del:
                 if st.button("🗑️ Delete", key=f"del_{report_name}"):
                     os.remove(r_path)
