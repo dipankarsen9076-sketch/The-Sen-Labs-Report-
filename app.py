@@ -24,7 +24,7 @@ st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wid
 # Jin phones/laptops ko permission deni hai, unki IDs yahan daalein:
 APPROVED_DEVICES = [
     # Pehli baar kholne par jo ID screen par aayegi, use yahan paste karke save karein
-    # "TSL-DEV-B623-B9D8",
+     "TSL-DEV-B623-B9D8",
 ]
 
 def get_device_id():
