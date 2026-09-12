@@ -15,7 +15,7 @@ import re
 from datetime import datetime
 import os
 import hashlib
-import urllib.parse
+import requests
 
 st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wide")
 
@@ -23,54 +23,23 @@ REPORT_DIR = "generated_reports"
 os.makedirs(REPORT_DIR, exist_ok=True)
 
 # ==============================================================================
-# 🌐 1. DIRECT QR REPORT DOWNLOAD HANDLER (FOR PATIENTS & DOCTORS)
+# 🌐 AUTO 30-DAY CLOUD STORAGE (NO LOGIN REQUIRED)
 # ==============================================================================
-# Agar QR scan kiya gaya hai, to device lock bypass hoga aur direct PDF download hogi
-query_params = st.query_params
-if "download" in query_params:
-    requested_file = query_params["download"]
-    file_path = os.path.join(REPORT_DIR, requested_file)
-    
-    st.markdown("""
-    <style>
-        .stApp { background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%) !important; }
-        .down-card {
-            background: #ffffff; border-radius: 14px; padding: 25px;
-            max-width: 500px; margin: 40px auto; border: 1px solid #cbd5e1;
-            text-align: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08);
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    if os.path.exists(file_path):
-        with open(file_path, "rb") as f:
-            pdf_data = f.read()
-            
-        st.markdown(f"""
-        <div class="down-card">
-            <h2 style="color: #1e3a8a; margin-bottom: 5px;">THE SEN LABS</h2>
-            <p style="color: #64748b; font-size: 13px; margin-top: 0;">Verified Diagnostic Pathology Report</p>
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 15px 0;">
-            <p style="font-size: 15px; color: #0f172a; font-weight: 600;">📄 {requested_file}</p>
-            <p style="color: #059669; font-size: 13px;">✅ Report is authenticated and ready to download.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        c1, c2, c3 = st.columns([1, 2, 1])
-        with c2:
-            st.download_button(
-                label="📥 Click Here to Download PDF Report",
-                data=pdf_data,
-                file_name=requested_file,
-                mime="application/pdf",
-                use_container_width=True
-            )
-    else:
-        st.error("⚠️ Report not found or link expired. Please contact The Sen Labs helpline.")
-    st.stop()
+def upload_to_30day_cloud(pdf_bytes, filename):
+    """Bina kisi account/login ke file.io par 30 days ke liye file upload karta hai"""
+    try:
+        files = {'file': (filename, pdf_bytes, 'application/pdf')}
+        data = {'expires': '30d', 'autoDelete': 'false'}
+        resp = requests.post('https://file.io', files=files, data=data, timeout=20)
+        res_json = resp.json()
+        if res_json.get("success"):
+            return res_json.get("link")
+    except Exception:
+        pass
+    return ""
 
 # ==============================================================================
-# 🔒 2. DEVICE ID HARDWARE LOCK SYSTEM (FOR LAB TECHNICIANS)
+# 🔒 1. DEVICE ID HARDWARE LOCK SYSTEM (FOR LAB TECHNICIANS)
 # ==============================================================================
 APPROVED_DEVICES = [
     "TSL-DEV-B623-B9D8",  # Aapka approved phone
@@ -106,7 +75,7 @@ if current_device not in APPROVED_DEVICES:
     st.stop()
 
 # ==============================================================================
-# 🎨 3. CLINICAL UI STYLING
+# 🎨 2. CLINICAL UI STYLING
 # ==============================================================================
 st.markdown("""
 <style>
@@ -174,7 +143,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 📷 4. DEFAULT BACK CAMERA SETUP
+# 📷 3. DEFAULT BACK CAMERA SETUP
 # ==============================================================================
 st.markdown(
     """
@@ -190,7 +159,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# 🔑 5. PERMANENT API KEY & LETTERHEAD MANAGEMENT
+# 🔑 4. PERMANENT API KEY & LETTERHEAD MANAGEMENT
 # ==============================================================================
 KEY_FILE = "api_key.txt"
 LETTERHEAD_FILE = "letterhead.png"
@@ -255,7 +224,7 @@ with st.sidebar:
 api_key = st.session_state.saved_api_key
 
 # ==============================================================================
-# 6. PATIENT DETAILS
+# 5. PATIENT DETAILS
 # ==============================================================================
 st.subheader("1. Patient & Sample Information")
 c1, c2, c3 = st.columns(3)
@@ -271,7 +240,7 @@ with c3:
     p_contact = "9076816740"
 
 # ==============================================================================
-# 7. INVESTIGATION PROFILES SELECTOR
+# 6. INVESTIGATION PROFILES SELECTOR
 # ==============================================================================
 st.subheader("2. Select Test Profiles for Patient")
 selected_profiles = st.multiselect(
@@ -305,7 +274,7 @@ selected_profiles = st.multiselect(
 )
 
 # ==============================================================================
-# 8. LAYOUT PREFERENCE (INDIVIDUAL vs MIX BUTTONS)
+# 7. LAYOUT PREFERENCE (INDIVIDUAL vs MIX BUTTONS)
 # ==============================================================================
 st.subheader("3. PDF Layout Preference")
 mode_selection = st.radio(
@@ -875,7 +844,7 @@ KNOWLEDGE_BASE = {
 }
 
 # ==============================================================================
-# 9. SAFE MULTI-PAGE REPORT MANAGER CLASS
+# 8. SAFE MULTI-PAGE REPORT MANAGER CLASS
 # ==============================================================================
 class PDFReportManager:
     def __init__(self, buffer, p_dict, download_url="", separate_pages_mode=True):
@@ -974,9 +943,8 @@ class PDFReportManager:
         self.c.drawString(self.width - 190, 32, "Consultant Pathologist (MD Path)")
         self.c.drawRightString(self.width - 42, 22, f"Page {self.page_number}")
 
-        # 📱 PURE QR CODE: SCANS DIRECTLY TO DOWNLOAD PDF REPORT
+        # 📱 PURE QR CODE: SCANS DIRECTLY TO 30-DAY PERSISTENT PDF DOWNLOAD LINK
         try:
-            # Agar download URL pass hua hai to direct URL khulega
             qr_content = self.download_url if self.download_url else (
                 f"Patient Name: Mr./Ms. {self.p['name']}\nAge: {self.p['age']} Yrs\nGender: {self.p['sex']}"
             )
@@ -1225,7 +1193,7 @@ class PDFReportManager:
         self.c.save()
 
 # ==============================================================================
-# 10. REPORT GENERATION ACTION
+# 9. REPORT GENERATION ACTION
 # ==============================================================================
 st.markdown("---")
 if not selected_profiles:
@@ -1235,13 +1203,7 @@ else:
         clean_patient_name = p_name.strip() if p_name.strip() else "Patient"
         filename = f"{sample_id}_{clean_patient_name}.pdf".replace(" ", "_")
         
-        # Domain detection: host ke hisab se automatic download link banega
-        host_url = st.context.headers.get("Host", "thesenlabs-reporting.streamlit.app")
-        scheme = "https"
-        encoded_fname = urllib.parse.quote(filename)
-        public_download_url = f"{scheme}://{host_url}/?download={encoded_fname}"
-
-        buf = io.BytesIO()
+        # Step A: Pehle test data compile karein
         p_info = {
             "name": p_name or "Anonymous",
             "age": p_age or "--",
@@ -1252,108 +1214,180 @@ else:
             "sample_id": sample_id
         }
         
-        doc = PDFReportManager(buf, p_info, download_url=public_download_url, separate_pages_mode=separate_pages)
-        first_section = True
-        
-        if "CBC" in final_report_sections:
-            doc.print_cbc_and_gbp_together(final_report_sections["CBC"]["items"], final_report_sections["CBC"]["gbp"])
-            first_section = False
+        with st.spinner("🚀 Generating Report & Syncing 30-Day Auto Cloud Storage..."):
+            # 1st Pass: PDF Bytes banana
+            pass1_buf = io.BytesIO()
+            doc1 = PDFReportManager(pass1_buf, p_info, download_url="", separate_pages_mode=separate_pages)
+            first_section = True
+            if "CBC" in final_report_sections:
+                doc1.print_cbc_and_gbp_together(final_report_sections["CBC"]["items"], final_report_sections["CBC"]["gbp"])
+                first_section = False
+            if "LFT" in final_report_sections:
+                doc1.print_section("LFT", "CLINICAL BIOCHEMISTRY - LIVER FUNCTION TEST (LFT)", final_report_sections["LFT"], "#854d0e", is_first_on_page=first_section)
+                first_section = False
+            if "KFT" in final_report_sections:
+                doc1.print_section("KFT", "CLINICAL BIOCHEMISTRY - KIDNEY FUNCTION TEST (KFT)", final_report_sections["KFT"], "#7c2d12", is_first_on_page=first_section)
+                first_section = False
+            if "LIPID" in final_report_sections:
+                doc1.print_section("LIPID", "CLINICAL BIOCHEMISTRY - LIPID PROFILE", final_report_sections["LIPID"], "#be123c", is_first_on_page=first_section)
+                first_section = False
+            if "DENGUE_PROFILE" in final_report_sections:
+                doc1.print_section("DENGUE", "SEROLOGY - DENGUE COMPLETE PROFILE (NS1 + IgM + IgG)", final_report_sections["DENGUE_PROFILE"], "#b45309", is_first_on_page=first_section)
+                first_section = False
+            elif "DENGUE_NS1" in final_report_sections:
+                doc1.print_section("DENGUE", "SEROLOGY - DENGUE NS1 ANTIGEN RAPID TEST", final_report_sections["DENGUE_NS1"], "#b45309", is_first_on_page=first_section)
+                first_section = False
+            if "VIRAL_PROFILE" in final_report_sections:
+                doc1.print_section("VIRAL", "IMMUNOLOGY & SEROLOGY - VIRAL MARKERS SCREENING (4-IN-1)", final_report_sections["VIRAL_PROFILE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "HIV_SINGLE" in final_report_sections:
+                doc1.print_section("VIRAL", "IMMUNOLOGY - HUMAN IMMUNODEFICIENCY VIRUS (HIV 1 & 2)", final_report_sections["HIV_SINGLE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "HBSAG_SINGLE" in final_report_sections:
+                doc1.print_section("VIRAL", "IMMUNOLOGY - HEPATITIS B SURFACE ANTIGEN (HBsAg)", final_report_sections["HBSAG_SINGLE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "HCV_SINGLE" in final_report_sections:
+                doc1.print_section("VIRAL", "IMMUNOLOGY - HEPATITIS C VIRUS (HCV) ANTIBODY", final_report_sections["HCV_SINGLE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "VDRL_SINGLE" in final_report_sections:
+                doc1.print_section("VIRAL", "SEROLOGY - VDRL / RPR TEST FOR SYPHILIS", final_report_sections["VDRL_SINGLE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "CRP_SINGLE" in final_report_sections:
+                doc1.print_section("CRP", "CLINICAL BIOCHEMISTRY - C-REACTIVE PROTEIN (CRP)", final_report_sections["CRP_SINGLE"], "#0369a1", is_first_on_page=first_section)
+                first_section = False
+            if "RA_SINGLE" in final_report_sections:
+                doc1.print_section("RA", "SEROLOGY & IMMUNOLOGY - RHEUMATOID FACTOR (RA / RF)", final_report_sections["RA_SINGLE"], "#0369a1", is_first_on_page=first_section)
+                first_section = False
+            if "CREATININE_SINGLE" in final_report_sections:
+                doc1.print_section("CREATININE", "CLINICAL BIOCHEMISTRY - SERUM CREATININE", final_report_sections["CREATININE_SINGLE"], "#047857", is_first_on_page=first_section)
+                first_section = False
+            if "URIC_ACID_SINGLE" in final_report_sections:
+                doc1.print_section("URIC_ACID", "CLINICAL BIOCHEMISTRY - SERUM URIC ACID", final_report_sections["URIC_ACID_SINGLE"], "#047857", is_first_on_page=first_section)
+                first_section = False
+            if "CALCIUM_SINGLE" in final_report_sections:
+                doc1.print_section("CALCIUM", "CLINICAL BIOCHEMISTRY - SERUM TOTAL CALCIUM", final_report_sections["CALCIUM_SINGLE"], "#047857", is_first_on_page=first_section)
+                first_section = False
+            if "BLOODGROUP" in final_report_sections:
+                doc1.print_section("BLOODGROUP", "IMMUNOHEMATOLOGY - BLOOD GROUP & RH FACTOR", final_report_sections["BLOODGROUP"], "#9f1239", is_first_on_page=first_section)
+                first_section = False
+            if "UPT" in final_report_sections:
+                doc1.print_section("UPT", "RAPID SEROLOGY - URINE PREGNANCY TEST (UPT)", final_report_sections["UPT"], "#a21caf", is_first_on_page=first_section)
+                first_section = False
+            if "URINE_RM" in final_report_sections:
+                doc1.print_section("URINE_RM", "CLINICAL PATHOLOGY - URINE ROUTINE & MICROSCOPY", final_report_sections["URINE_RM"], "#ca8a04", is_first_on_page=first_section)
+                first_section = False
+            if "WIDAL" in final_report_sections:
+                doc1.print_section("WIDAL", "SEROLOGY - WIDAL AGGLUTINATION PROFILE", final_report_sections["WIDAL"], "#4338ca", is_first_on_page=first_section)
+                first_section = False
+            if "TYPHIDOT" in final_report_sections:
+                doc1.print_section("TYPHIDOT", "RAPID SEROLOGY - TYPHIDOT (IgM / IgG) PROFILE", final_report_sections["TYPHIDOT"], "#6b21a8", is_first_on_page=first_section)
+                first_section = False
+            if "MALARIA" in final_report_sections:
+                doc1.print_section("MALARIA", "PARASITOLOGY - MALARIA RAPID & MICROSCOPY PROFILE", final_report_sections["MALARIA"], "#0e7490", is_first_on_page=first_section)
+                first_section = False
+            if "GLUCOSE" in final_report_sections:
+                doc1.print_section("GLUCOSE", "BIOCHEMISTRY - BLOOD GLUCOSE MONITORING", final_report_sections["GLUCOSE"], "#1e3a8a", is_first_on_page=first_section)
+                first_section = False
+            doc1.finish()
+            initial_bytes = pass1_buf.getvalue()
+
+            # Step B: Auto Upload to 30-Day Cloud (File.io)
+            persistent_link = upload_to_30day_cloud(initial_bytes, filename)
             
-        if "LFT" in final_report_sections:
-            doc.print_section("LFT", "CLINICAL BIOCHEMISTRY - LIVER FUNCTION TEST (LFT)", final_report_sections["LFT"], "#854d0e", is_first_on_page=first_section)
-            first_section = False
-            
-        if "KFT" in final_report_sections:
-            doc.print_section("KFT", "CLINICAL BIOCHEMISTRY - KIDNEY FUNCTION TEST (KFT)", final_report_sections["KFT"], "#7c2d12", is_first_on_page=first_section)
-            first_section = False
-            
-        if "LIPID" in final_report_sections:
-            doc.print_section("LIPID", "CLINICAL BIOCHEMISTRY - LIPID PROFILE", final_report_sections["LIPID"], "#be123c", is_first_on_page=first_section)
-            first_section = False
+            # Step C: Naye persistent cloud link ke sath final PDF embed karein
+            final_buf = io.BytesIO()
+            doc_final = PDFReportManager(final_buf, p_info, download_url=persistent_link, separate_pages_mode=separate_pages)
+            first_section = True
+            if "CBC" in final_report_sections:
+                doc_final.print_cbc_and_gbp_together(final_report_sections["CBC"]["items"], final_report_sections["CBC"]["gbp"])
+                first_section = False
+            if "LFT" in final_report_sections:
+                doc_final.print_section("LFT", "CLINICAL BIOCHEMISTRY - LIVER FUNCTION TEST (LFT)", final_report_sections["LFT"], "#854d0e", is_first_on_page=first_section)
+                first_section = False
+            if "KFT" in final_report_sections:
+                doc_final.print_section("KFT", "CLINICAL BIOCHEMISTRY - KIDNEY FUNCTION TEST (KFT)", final_report_sections["KFT"], "#7c2d12", is_first_on_page=first_section)
+                first_section = False
+            if "LIPID" in final_report_sections:
+                doc_final.print_section("LIPID", "CLINICAL BIOCHEMISTRY - LIPID PROFILE", final_report_sections["LIPID"], "#be123c", is_first_on_page=first_section)
+                first_section = False
+            if "DENGUE_PROFILE" in final_report_sections:
+                doc_final.print_section("DENGUE", "SEROLOGY - DENGUE COMPLETE PROFILE (NS1 + IgM + IgG)", final_report_sections["DENGUE_PROFILE"], "#b45309", is_first_on_page=first_section)
+                first_section = False
+            elif "DENGUE_NS1" in final_report_sections:
+                doc_final.print_section("DENGUE", "SEROLOGY - DENGUE NS1 ANTIGEN RAPID TEST", final_report_sections["DENGUE_NS1"], "#b45309", is_first_on_page=first_section)
+                first_section = False
+            if "VIRAL_PROFILE" in final_report_sections:
+                doc_final.print_section("VIRAL", "IMMUNOLOGY & SEROLOGY - VIRAL MARKERS SCREENING (4-IN-1)", final_report_sections["VIRAL_PROFILE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "HIV_SINGLE" in final_report_sections:
+                doc_final.print_section("VIRAL", "IMMUNOLOGY - HUMAN IMMUNODEFICIENCY VIRUS (HIV 1 & 2)", final_report_sections["HIV_SINGLE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "HBSAG_SINGLE" in final_report_sections:
+                doc_final.print_section("VIRAL", "IMMUNOLOGY - HEPATITIS B SURFACE ANTIGEN (HBsAg)", final_report_sections["HBSAG_SINGLE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "HCV_SINGLE" in final_report_sections:
+                doc_final.print_section("VIRAL", "IMMUNOLOGY - HEPATITIS C VIRUS (HCV) ANTIBODY", final_report_sections["HCV_SINGLE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "VDRL_SINGLE" in final_report_sections:
+                doc_final.print_section("VIRAL", "SEROLOGY - VDRL / RPR TEST FOR SYPHILIS", final_report_sections["VDRL_SINGLE"], "#991b1b", is_first_on_page=first_section)
+                first_section = False
+            if "CRP_SINGLE" in final_report_sections:
+                doc_final.print_section("CRP", "CLINICAL BIOCHEMISTRY - C-REACTIVE PROTEIN (CRP)", final_report_sections["CRP_SINGLE"], "#0369a1", is_first_on_page=first_section)
+                first_section = False
+            if "RA_SINGLE" in final_report_sections:
+                doc_final.print_section("RA", "SEROLOGY & IMMUNOLOGY - RHEUMATOID FACTOR (RA / RF)", final_report_sections["RA_SINGLE"], "#0369a1", is_first_on_page=first_section)
+                first_section = False
+            if "CREATININE_SINGLE" in final_report_sections:
+                doc_final.print_section("CREATININE", "CLINICAL BIOCHEMISTRY - SERUM CREATININE", final_report_sections["CREATININE_SINGLE"], "#047857", is_first_on_page=first_section)
+                first_section = False
+            if "URIC_ACID_SINGLE" in final_report_sections:
+                doc_final.print_section("URIC_ACID", "CLINICAL BIOCHEMISTRY - SERUM URIC ACID", final_report_sections["URIC_ACID_SINGLE"], "#047857", is_first_on_page=first_section)
+                first_section = False
+            if "CALCIUM_SINGLE" in final_report_sections:
+                doc_final.print_section("CALCIUM", "CLINICAL BIOCHEMISTRY - SERUM TOTAL CALCIUM", final_report_sections["CALCIUM_SINGLE"], "#047857", is_first_on_page=first_section)
+                first_section = False
+            if "BLOODGROUP" in final_report_sections:
+                doc_final.print_section("BLOODGROUP", "IMMUNOHEMATOLOGY - BLOOD GROUP & RH FACTOR", final_report_sections["BLOODGROUP"], "#9f1239", is_first_on_page=first_section)
+                first_section = False
+            if "UPT" in final_report_sections:
+                doc_final.print_section("UPT", "RAPID SEROLOGY - URINE PREGNANCY TEST (UPT)", final_report_sections["UPT"], "#a21caf", is_first_on_page=first_section)
+                first_section = False
+            if "URINE_RM" in final_report_sections:
+                doc_final.print_section("URINE_RM", "CLINICAL PATHOLOGY - URINE ROUTINE & MICROSCOPY", final_report_sections["URINE_RM"], "#ca8a04", is_first_on_page=first_section)
+                first_section = False
+            if "WIDAL" in final_report_sections:
+                doc_final.print_section("WIDAL", "SEROLOGY - WIDAL AGGLUTINATION PROFILE", final_report_sections["WIDAL"], "#4338ca", is_first_on_page=first_section)
+                first_section = False
+            if "TYPHIDOT" in final_report_sections:
+                doc_final.print_section("TYPHIDOT", "RAPID SEROLOGY - TYPHIDOT (IgM / IgG) PROFILE", final_report_sections["TYPHIDOT"], "#6b21a8", is_first_on_page=first_section)
+                first_section = False
+            if "MALARIA" in final_report_sections:
+                doc_final.print_section("MALARIA", "PARASITOLOGY - MALARIA RAPID & MICROSCOPY PROFILE", final_report_sections["MALARIA"], "#0e7490", is_first_on_page=first_section)
+                first_section = False
+            if "GLUCOSE" in final_report_sections:
+                doc_final.print_section("GLUCOSE", "BIOCHEMISTRY - BLOOD GLUCOSE MONITORING", final_report_sections["GLUCOSE"], "#1e3a8a", is_first_on_page=first_section)
+                first_section = False
+            doc_final.finish()
+            final_pdf_bytes = final_buf.getvalue()
 
-        if "DENGUE_PROFILE" in final_report_sections:
-            doc.print_section("DENGUE", "SEROLOGY - DENGUE COMPLETE PROFILE (NS1 + IgM + IgG)", final_report_sections["DENGUE_PROFILE"], "#b45309", is_first_on_page=first_section)
-            first_section = False
-        elif "DENGUE_NS1" in final_report_sections:
-            doc.print_section("DENGUE", "SEROLOGY - DENGUE NS1 ANTIGEN RAPID TEST", final_report_sections["DENGUE_NS1"], "#b45309", is_first_on_page=first_section)
-            first_section = False
-
-        if "VIRAL_PROFILE" in final_report_sections:
-            doc.print_section("VIRAL", "IMMUNOLOGY & SEROLOGY - VIRAL MARKERS SCREENING (4-IN-1)", final_report_sections["VIRAL_PROFILE"], "#991b1b", is_first_on_page=first_section)
-            first_section = False
-        if "HIV_SINGLE" in final_report_sections:
-            doc.print_section("VIRAL", "IMMUNOLOGY - HUMAN IMMUNODEFICIENCY VIRUS (HIV 1 & 2)", final_report_sections["HIV_SINGLE"], "#991b1b", is_first_on_page=first_section)
-            first_section = False
-        if "HBSAG_SINGLE" in final_report_sections:
-            doc.print_section("VIRAL", "IMMUNOLOGY - HEPATITIS B SURFACE ANTIGEN (HBsAg)", final_report_sections["HBSAG_SINGLE"], "#991b1b", is_first_on_page=first_section)
-            first_section = False
-        if "HCV_SINGLE" in final_report_sections:
-            doc.print_section("VIRAL", "IMMUNOLOGY - HEPATITIS C VIRUS (HCV) ANTIBODY", final_report_sections["HCV_SINGLE"], "#991b1b", is_first_on_page=first_section)
-            first_section = False
-        if "VDRL_SINGLE" in final_report_sections:
-            doc.print_section("VIRAL", "SEROLOGY - VDRL / RPR TEST FOR SYPHILIS", final_report_sections["VDRL_SINGLE"], "#991b1b", is_first_on_page=first_section)
-            first_section = False
-
-        if "CRP_SINGLE" in final_report_sections:
-            doc.print_section("CRP", "CLINICAL BIOCHEMISTRY - C-REACTIVE PROTEIN (CRP)", final_report_sections["CRP_SINGLE"], "#0369a1", is_first_on_page=first_section)
-            first_section = False
-        if "RA_SINGLE" in final_report_sections:
-            doc.print_section("RA", "SEROLOGY & IMMUNOLOGY - RHEUMATOID FACTOR (RA / RF)", final_report_sections["RA_SINGLE"], "#0369a1", is_first_on_page=first_section)
-            first_section = False
-
-        if "CREATININE_SINGLE" in final_report_sections:
-            doc.print_section("CREATININE", "CLINICAL BIOCHEMISTRY - SERUM CREATININE", final_report_sections["CREATININE_SINGLE"], "#047857", is_first_on_page=first_section)
-            first_section = False
-        if "URIC_ACID_SINGLE" in final_report_sections:
-            doc.print_section("URIC_ACID", "CLINICAL BIOCHEMISTRY - SERUM URIC ACID", final_report_sections["URIC_ACID_SINGLE"], "#047857", is_first_on_page=first_section)
-            first_section = False
-        if "CALCIUM_SINGLE" in final_report_sections:
-            doc.print_section("CALCIUM", "CLINICAL BIOCHEMISTRY - SERUM TOTAL CALCIUM", final_report_sections["CALCIUM_SINGLE"], "#047857", is_first_on_page=first_section)
-            first_section = False
-
-        if "BLOODGROUP" in final_report_sections:
-            doc.print_section("BLOODGROUP", "IMMUNOHEMATOLOGY - BLOOD GROUP & RH FACTOR", final_report_sections["BLOODGROUP"], "#9f1239", is_first_on_page=first_section)
-            first_section = False
-        if "UPT" in final_report_sections:
-            doc.print_section("UPT", "RAPID SEROLOGY - URINE PREGNANCY TEST (UPT)", final_report_sections["UPT"], "#a21caf", is_first_on_page=first_section)
-            first_section = False
-
-        if "URINE_RM" in final_report_sections:
-            doc.print_section("URINE_RM", "CLINICAL PATHOLOGY - URINE ROUTINE & MICROSCOPY", final_report_sections["URINE_RM"], "#ca8a04", is_first_on_page=first_section)
-            first_section = False
-
-        if "WIDAL" in final_report_sections:
-            doc.print_section("WIDAL", "SEROLOGY - WIDAL AGGLUTINATION PROFILE", final_report_sections["WIDAL"], "#4338ca", is_first_on_page=first_section)
-            first_section = False
-        if "TYPHIDOT" in final_report_sections:
-            doc.print_section("TYPHIDOT", "RAPID SEROLOGY - TYPHIDOT (IgM / IgG) PROFILE", final_report_sections["TYPHIDOT"], "#6b21a8", is_first_on_page=first_section)
-            first_section = False
-        if "MALARIA" in final_report_sections:
-            doc.print_section("MALARIA", "PARASITOLOGY - MALARIA RAPID & MICROSCOPY PROFILE", final_report_sections["MALARIA"], "#0e7490", is_first_on_page=first_section)
-            first_section = False
-        if "GLUCOSE" in final_report_sections:
-            doc.print_section("GLUCOSE", "BIOCHEMISTRY - BLOOD GLUCOSE MONITORING", final_report_sections["GLUCOSE"], "#1e3a8a", is_first_on_page=first_section)
-            first_section = False
-            
-        doc.finish()
-        pdf_bytes = buf.getvalue()
-        
+        # Local report directory mein backup save
         filepath = os.path.join(REPORT_DIR, filename)
         with open(filepath, "wb") as f:
-            f.write(pdf_bytes)
+            f.write(final_pdf_bytes)
             
-        st.success(f"Report '{filename}' generated and archived successfully!")
-        st.info(f"🔗 **Direct QR Download Link:** `{public_download_url}`")
-        
+        st.success(f"Report '{filename}' generated and stored for 30 days!")
+        if persistent_link:
+            st.info(f"🌐 **Direct 30-Day Download Link (In QR):** {persistent_link}")
+
         st.download_button(
             label="📥 Download Clinical Diagnostic Report (PDF)",
-            data=pdf_bytes,
+            data=final_pdf_bytes,
             file_name=filename,
             mime="application/pdf"
         )
 
 # ==============================================================================
-# 11. SAVED REPORTS VIEWER
+# 10. SAVED REPORTS VIEWER
 # ==============================================================================
 st.markdown("---")
 with st.expander("📁 Generated & Saved Reports History", expanded=False):
