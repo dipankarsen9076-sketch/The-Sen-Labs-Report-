@@ -15,16 +15,65 @@ import re
 from datetime import datetime
 import os
 import hashlib
+import urllib.parse
 
 st.set_page_config(page_title="The Sen Labs - Diagnostic Reporting", layout="wide")
 
+REPORT_DIR = "generated_reports"
+os.makedirs(REPORT_DIR, exist_ok=True)
+
 # ==============================================================================
-# 🔒 1. DEVICE ID HARDWARE LOCK SYSTEM
+# 🌐 1. DIRECT QR REPORT DOWNLOAD HANDLER (FOR PATIENTS & DOCTORS)
 # ==============================================================================
-# Jin phones/laptops ko permission deni hai, unki IDs yahan daalein:
+# Agar QR scan kiya gaya hai, to device lock bypass hoga aur direct PDF download hogi
+query_params = st.query_params
+if "download" in query_params:
+    requested_file = query_params["download"]
+    file_path = os.path.join(REPORT_DIR, requested_file)
+    
+    st.markdown("""
+    <style>
+        .stApp { background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%) !important; }
+        .down-card {
+            background: #ffffff; border-radius: 14px; padding: 25px;
+            max-width: 500px; margin: 40px auto; border: 1px solid #cbd5e1;
+            text-align: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08);
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f:
+            pdf_data = f.read()
+            
+        st.markdown(f"""
+        <div class="down-card">
+            <h2 style="color: #1e3a8a; margin-bottom: 5px;">THE SEN LABS</h2>
+            <p style="color: #64748b; font-size: 13px; margin-top: 0;">Verified Diagnostic Pathology Report</p>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 15px 0;">
+            <p style="font-size: 15px; color: #0f172a; font-weight: 600;">📄 {requested_file}</p>
+            <p style="color: #059669; font-size: 13px;">✅ Report is authenticated and ready to download.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            st.download_button(
+                label="📥 Click Here to Download PDF Report",
+                data=pdf_data,
+                file_name=requested_file,
+                mime="application/pdf",
+                use_container_width=True
+            )
+    else:
+        st.error("⚠️ Report not found or link expired. Please contact The Sen Labs helpline.")
+    st.stop()
+
+# ==============================================================================
+# 🔒 2. DEVICE ID HARDWARE LOCK SYSTEM (FOR LAB TECHNICIANS)
+# ==============================================================================
 APPROVED_DEVICES = [
-    # Pehli baar kholne par jo ID screen par aayegi, use yahan paste karke save karein
-     "TSL-DEV-B623-B9D8",
+    "TSL-DEV-B623-B9D8",  # Aapka approved phone
 ]
 
 def get_device_id():
@@ -52,13 +101,12 @@ if current_device not in APPROVED_DEVICES:
     {current_device}
     ```
     
-    👉 Is Device ID ko copy karke **Admin (Dipankar Sen)** ko bhejein aur approval request karein.  
-    Approval add hote hi page ko refresh karein, app chalu ho jayegi.
+    👉 Is Device ID ko copy karke **Admin (Dipankar Sen)** ko bhejein aur approval request karein.
     """)
     st.stop()
 
 # ==============================================================================
-# 🎨 2. CLINICAL UI STYLING
+# 🎨 3. CLINICAL UI STYLING
 # ==============================================================================
 st.markdown("""
 <style>
@@ -126,7 +174,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 📷 3. DEFAULT BACK CAMERA SETUP
+# 📷 4. DEFAULT BACK CAMERA SETUP
 # ==============================================================================
 st.markdown(
     """
@@ -142,7 +190,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# 🔑 4. PERMANENT API KEY & LETTERHEAD MANAGEMENT
+# 🔑 5. PERMANENT API KEY & LETTERHEAD MANAGEMENT
 # ==============================================================================
 KEY_FILE = "api_key.txt"
 LETTERHEAD_FILE = "letterhead.png"
@@ -205,11 +253,9 @@ with st.sidebar:
             st.error(f"Error saving letterhead: {e}")
 
 api_key = st.session_state.saved_api_key
-REPORT_DIR = "generated_reports"
-os.makedirs(REPORT_DIR, exist_ok=True)
 
 # ==============================================================================
-# 5. PATIENT DETAILS
+# 6. PATIENT DETAILS
 # ==============================================================================
 st.subheader("1. Patient & Sample Information")
 c1, c2, c3 = st.columns(3)
@@ -225,7 +271,7 @@ with c3:
     p_contact = "9076816740"
 
 # ==============================================================================
-# 6. INVESTIGATION PROFILES SELECTOR
+# 7. INVESTIGATION PROFILES SELECTOR
 # ==============================================================================
 st.subheader("2. Select Test Profiles for Patient")
 selected_profiles = st.multiselect(
@@ -259,7 +305,7 @@ selected_profiles = st.multiselect(
 )
 
 # ==============================================================================
-# 7. LAYOUT PREFERENCE (INDIVIDUAL vs MIX BUTTONS)
+# 8. LAYOUT PREFERENCE (INDIVIDUAL vs MIX BUTTONS)
 # ==============================================================================
 st.subheader("3. PDF Layout Preference")
 mode_selection = st.radio(
@@ -829,13 +875,14 @@ KNOWLEDGE_BASE = {
 }
 
 # ==============================================================================
-# 8. SAFE MULTI-PAGE REPORT MANAGER CLASS
+# 9. SAFE MULTI-PAGE REPORT MANAGER CLASS
 # ==============================================================================
 class PDFReportManager:
-    def __init__(self, buffer, p_dict, separate_pages_mode=True):
+    def __init__(self, buffer, p_dict, download_url="", separate_pages_mode=True):
         self.c = canvas.Canvas(buffer, pagesize=letter)
         self.width, self.height = letter
         self.p = p_dict
+        self.download_url = download_url
         self.separate_pages_mode = separate_pages_mode
         self.curr_y = self.height - 138
         self.page_number = 1
@@ -879,7 +926,7 @@ class PDFReportManager:
             self.c.drawString(text_x_pos, self.height - 44, "ADVANCED PATHOLOGY & CLINICAL BIOCHEMISTRY | AUTOMATED DIAGNOSTICS")
             self.c.drawRightString(self.width - 32, self.height - 34, f"Helpdesk: +91 {self.p['contact']}")
 
-        # Patient Info Box (WITH PATIENT MOBILE NUMBER)
+        # Patient Info Box
         self.c.setFillColor(colors.HexColor("#f8fafc"))
         self.c.setStrokeColor(colors.HexColor("#cbd5e1"))
         self.c.roundRect(32, self.height - 128, self.width - 64, 62, 3, fill=True, stroke=True)
@@ -927,12 +974,11 @@ class PDFReportManager:
         self.c.drawString(self.width - 190, 32, "Consultant Pathologist (MD Path)")
         self.c.drawRightString(self.width - 42, 22, f"Page {self.page_number}")
 
-        # PURE SIMPLE QR CODE IN THE MARKED RED AREA (ZERO TEXT AROUND IT)
+        # 📱 PURE QR CODE: SCANS DIRECTLY TO DOWNLOAD PDF REPORT
         try:
-            qr_content = (
-                f"Patient Name: Mr./Ms. {self.p['name']}\n"
-                f"Age: {self.p['age']} Yrs\n"
-                f"Gender: {self.p['sex']}"
+            # Agar download URL pass hua hai to direct URL khulega
+            qr_content = self.download_url if self.download_url else (
+                f"Patient Name: Mr./Ms. {self.p['name']}\nAge: {self.p['age']} Yrs\nGender: {self.p['sex']}"
             )
             qr_widget = QrCodeWidget(qr_content)
             bounds = qr_widget.getBounds()
@@ -1179,13 +1225,22 @@ class PDFReportManager:
         self.c.save()
 
 # ==============================================================================
-# 9. REPORT GENERATION ACTION
+# 10. REPORT GENERATION ACTION
 # ==============================================================================
 st.markdown("---")
 if not selected_profiles:
     st.info("👆 Kripya Section 2 me se kam se kam ek test profile select karein.")
 else:
     if st.button("🖨️ Generate Professional Pathology Report (PDF)"):
+        clean_patient_name = p_name.strip() if p_name.strip() else "Patient"
+        filename = f"{sample_id}_{clean_patient_name}.pdf".replace(" ", "_")
+        
+        # Domain detection: host ke hisab se automatic download link banega
+        host_url = st.context.headers.get("Host", "thesenlabs-reporting.streamlit.app")
+        scheme = "https"
+        encoded_fname = urllib.parse.quote(filename)
+        public_download_url = f"{scheme}://{host_url}/?download={encoded_fname}"
+
         buf = io.BytesIO()
         p_info = {
             "name": p_name or "Anonymous",
@@ -1197,7 +1252,7 @@ else:
             "sample_id": sample_id
         }
         
-        doc = PDFReportManager(buf, p_info, separate_pages_mode=separate_pages)
+        doc = PDFReportManager(buf, p_info, download_url=public_download_url, separate_pages_mode=separate_pages)
         first_section = True
         
         if "CBC" in final_report_sections:
@@ -1282,11 +1337,14 @@ else:
             
         doc.finish()
         pdf_bytes = buf.getvalue()
-        filename = f"{sample_id}_{p_name or 'Patient'}.pdf".replace(" ", "_")
+        
         filepath = os.path.join(REPORT_DIR, filename)
-        with open(filepath, "wb") as f: f.write(pdf_bytes)
+        with open(filepath, "wb") as f:
+            f.write(pdf_bytes)
             
         st.success(f"Report '{filename}' generated and archived successfully!")
+        st.info(f"🔗 **Direct QR Download Link:** `{public_download_url}`")
+        
         st.download_button(
             label="📥 Download Clinical Diagnostic Report (PDF)",
             data=pdf_bytes,
@@ -1295,7 +1353,7 @@ else:
         )
 
 # ==============================================================================
-# 10. SAVED REPORTS VIEWER
+# 11. SAVED REPORTS VIEWER
 # ==============================================================================
 st.markdown("---")
 with st.expander("📁 Generated & Saved Reports History", expanded=False):
